@@ -1,8 +1,8 @@
 "use strict";
 (function(){
-  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:""};
+  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false};
   const listeners=new Set();
-  let tokenClient=null,scriptPromise=null;
+  let loginClient=null,youtubeClient=null,scriptPromise=null;
   const notify=()=>listeners.forEach(fn=>{try{fn({...state})}catch(e){console.warn("Auth UI",e)}});
   const subscribe=fn=>{listeners.add(fn);fn({...state});return()=>listeners.delete(fn)};
   const fail=(error)=>{state.loading=false;state.error=String(error?.message||error||"Erreur de connexion Google");notify()};
@@ -40,51 +40,82 @@
     if(!response.ok)throw Error(body.error?.message||"Google HTTP "+response.status);
     return body;
   }
+
+  const YT_SCOPE="https://www.googleapis.com/auth/youtube.readonly";
   async function fetchCollections(){
+    if(!state.youtubeConnected)return;
     const requests=await Promise.allSettled([
       googleGet("youtube/v3/playlists?part=snippet,contentDetails&mine=true&maxResults=50"),
       googleGet("youtube/v3/subscriptions?part=snippet&mine=true&maxResults=50")
     ]);
     state.playlists=requests[0].status==="fulfilled"?requests[0].value.items||[]:[];
     state.subscriptions=requests[1].status==="fulfilled"?requests[1].value.items||[]:[];
-    if(requests.some(x=>x.status==="rejected")){
-      state.error="Connexion réussie, mais certaines données YouTube sont indisponibles. Vérifie que YouTube Data API v3 est activée et que les autorisations ont été acceptées.";
-    }
-    notify();
-  }
-  async function acceptToken(response){
-    if(response.error)throw Error(response.error_description||response.error);
-    if(!response.access_token)throw Error("Google n'a pas fourni de jeton d'accès.");
-    state.token=response.access_token;state.expiresAt=Date.now()+Math.max(60,Number(response.expires_in||3500))*1000;
-    state.error="";
-    try{
-      state.profile=await googleGet("oauth2/v3/userinfo");
-    }catch(error){state.profile=null;throw error}
+    if(requests.some(x=>x.status==="rejected"))
+      state.error="Google est connecté, mais certaines données YouTube ne sont pas accessibles. L’autorisation YouTube peut nécessiter la vérification de JabouTude par Google.";
     state.loading=false;notify();
+  }
+  async function acceptLogin(response){
+    if(response.error)throw Error(response.error_description||response.error);
+    if(!response.access_token)throw Error("Aucun jeton Google reçu.");
+    state.token=response.access_token;
+    state.expiresAt=Date.now()+Math.max(60,Number(response.expires_in||3500))*1000;
+    state.error="";state.youtubeConnected=false;
+    state.playlists=[];state.subscriptions=[];
+    state.profile=await googleGet("oauth2/v3/userinfo");
+    state.loading=false;notify();
+  }
+  async function acceptYoutube(response){
+    if(response.error)throw Error(response.error_description||response.error);
+    if(!response.access_token)throw Error("Autorisation YouTube non reçue.");
+    if(!window.google.accounts.oauth2.hasGrantedAllScopes(response,YT_SCOPE)){
+      state.loading=false;
+      state.error="Tu n’as pas autorisé YouTube. Ton compte Google reste connecté.";
+      notify();return;
+    }
+    state.token=response.access_token;
+    state.expiresAt=Date.now()+Math.max(60,Number(response.expires_in||3500))*1000;
+    state.youtubeConnected=true;state.error="";notify();
     await fetchCollections();
   }
   async function connect(){
-    if(!state.configured)throw Error("La connexion Google doit d'abord être activée par le propriétaire de JabouTude dans Google Cloud. Aucun identifiant OAuth n'est encore configuré.");
+    if(!state.configured)throw Error("La connexion Google publique attend l’activation de l’application par son propriétaire.");
     state.error="";state.loading=true;notify();
     try{
       await loadGoogle();
-      if(!tokenClient){
-        tokenClient=window.google.accounts.oauth2.initTokenClient({
+      if(!loginClient){
+        loginClient=window.google.accounts.oauth2.initTokenClient({
           client_id:state.clientId,
-          scope:"openid email profile https://www.googleapis.com/auth/youtube.readonly",
-          callback:response=>{acceptToken(response).catch(fail)},
-          error_callback:err=>fail(err?.message||err?.type||"Fenêtre de connexion Google fermée")
+          scope:"openid email profile",
+          callback:r=>acceptLogin(r).catch(fail),
+          error_callback:r=>fail(r?.message||r?.type||"Connexion Google annulée")
         });
       }
-      tokenClient.requestAccessToken({prompt:"select_account"});
+      loginClient.requestAccessToken({prompt:"select_account"});
+    }catch(error){fail(error);throw error}
+  }
+  async function connectYoutube(){
+    if(!state.profile)throw Error("Connecte d’abord ton compte Google.");
+    state.error="";state.loading=true;notify();
+    try{
+      await loadGoogle();
+      if(!youtubeClient){
+        youtubeClient=window.google.accounts.oauth2.initTokenClient({
+          client_id:state.clientId,
+          scope:"openid email profile "+YT_SCOPE,
+          callback:r=>acceptYoutube(r).catch(fail),
+          error_callback:r=>fail(r?.message||r?.type||"Autorisation YouTube annulée")
+        });
+      }
+      youtubeClient.requestAccessToken({prompt:"consent"});
     }catch(error){fail(error);throw error}
   }
   function disconnect(){
     // Do not persist or reveal Google tokens; disconnect from this page only.
-    state.token=null;state.profile=null;state.playlists=[];state.subscriptions=[];state.expiresAt=0;state.loading=false;state.error="";
+    state.token=null;state.profile=null;state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;state.expiresAt=0;state.loading=false;state.error="";
     notify();
   }
   async function playlistItems(playlistId){
+    if(!state.youtubeConnected)throw Error("Autorise l’accès à YouTube avant d’ouvrir une playlist.");
     if(!/^[A-Za-z0-9_-]{2,100}$/.test(String(playlistId||"")))throw Error("Playlist non valide");
     const data=await googleGet("youtube/v3/playlistItems?part=snippet,contentDetails&playlistId="+encodeURIComponent(playlistId)+"&maxResults=50");
     return (data.items||[]).map(x=>{
@@ -94,5 +125,5 @@
       return {id,title:x.snippet?.title||"Vidéo YouTube",author:x.snippet?.videoOwnerChannelTitle||"",thumb:th.medium?.url||th.default?.url||"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg",duration:0};
     }).filter(Boolean);
   }
-  window.JabouAuth={state,subscribe,init,connect,disconnect,playlistItems};
+  window.JabouAuth={state,subscribe,init,connect,connectYoutube,disconnect,playlistItems};
 })();

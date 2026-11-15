@@ -151,9 +151,9 @@ function settingsHtml(){return '<div class="settings">'+
 
 function renderLibrary(){
   const auth=window.JabouAuth?.state;
-  const pls=auth?.profile?auth.playlists:[];
+  const pls=auth?.youtubeConnected?auth.playlists:[];
   const body=pls.length?'<div class="playlist-grid">'+pls.map(x=>'<button class="playlist-item" data-playlist="'+h(x.id)+'"><span>♫</span><strong>'+h(x.snippet?.title||"Playlist")+'</strong><small>'+h(x.contentDetails?.itemCount||0)+' vidéos</small></button>').join("")+'</div>':
-      '<div class="notice">'+(auth?.profile?"Aucune playlist accessible depuis ce compte.":"Connecte ton compte Google pour retrouver tes playlists YouTube lorsqu’OAuth est activé.")+'</div>';
+      '<div class="notice">'+(auth?.youtubeConnected?"Aucune playlist disponible depuis ton compte.":auth?.profile?"Active l’accès YouTube depuis l’onglet Compte pour afficher tes playlists.":"Connecte ton compte Google depuis l’onglet Compte pour accéder à tes playlists.")+'</div>';
   const fav=state.favorites.filter(x=>x?.id);
   state.items=fav;
   $("content").innerHTML='<div class="headrow"><h2>Mes favoris</h2><span class="tag">'+fav.length+'</span></div>'+
@@ -166,22 +166,26 @@ function renderAccount(){
   const p=auth.profile;
   let profile="";
   if(p){
-    const pic=/^https:\/\//.test(p.picture||"")?'<img class="profile-photo" src="'+h(p.picture)+'" alt="">':'<span class="profile-photo">✓</span>';
+    const pic=/^https:\/\//.test(p.picture||"")?'<img class="profile-photo" src="'+h(p.picture)+'" alt="Photo Google">':'<span class="profile-photo">✓</span>';
+    const yt=auth.youtubeConnected?
+      '<div class="notice"><b>YouTube connecté</b> · Tes playlists et abonnements sont accessibles avec les autorisations accordées.</div>':
+      '<div class="notice">Ton compte Google est connecté. Pour récupérer tes playlists et abonnements, autorise séparément la lecture de ton compte YouTube. Cette autorisation peut nécessiter la validation de JabouTude par Google.</div><button class="primary" data-connect-youtube>Connecter mes playlists YouTube</button>';
     profile='<div class="account-profile">'+pic+'<div><strong>'+h(p.name||p.email||"Compte Google")+'</strong><div class="muted">'+h(p.email||"Compte connecté")+'</div></div></div>'+
-    '<div class="actions"><button class="secondary" data-disconnect>Se déconnecter</button><button class="secondary" data-tab="library">Mes playlists</button></div>'+
-    '<div class="headrow"><h2>Mes abonnements</h2><span class="tag">'+auth.subscriptions.length+'</span></div>'+
-    (auth.subscriptions.length?'<div class="subscriptions">'+auth.subscriptions.map(x=>'<a href="https://www.youtube.com/channel/'+encodeURIComponent(x.snippet?.resourceId?.channelId||"")+'" target="_blank" rel="noopener noreferrer">'+h(x.snippet?.title||"Chaîne YouTube")+' ↗</a>').join("")+'</div>':'<p class="muted">Aucun abonnement accessible ou YouTube Data API non activée.</p>');
+      '<div class="actions"><button class="secondary" data-disconnect>Se déconnecter</button><button class="secondary" data-tab="library">Bibliothèque</button></div>'+yt+
+      (auth.youtubeConnected?'<div class="headrow"><h2>Mes abonnements</h2><span class="tag">'+auth.subscriptions.length+'</span></div>'+
+      (auth.subscriptions.length?'<div class="subscriptions">'+auth.subscriptions.map(x=>'<a href="https://www.youtube.com/channel/'+encodeURIComponent(x.snippet?.resourceId?.channelId||"")+'" target="_blank" rel="noopener noreferrer">'+h(x.snippet?.title||"Chaîne YouTube")+' ↗</a>').join("")+'</div>':'<p class="muted">Aucun abonnement accessible sur ce compte.</p>'):'');
   }else{
-    profile='<div class="connect-hero"><div class="google-emblem">G</div><h2>Ton compte Google</h2><p class="muted">Retrouve ta photo de profil, tes playlists et tes abonnements YouTube avec une connexion officielle et tes autorisations.</p>'+
-    '<button class="primary" data-login'+(!auth.configured?' disabled':'')+'>'+(auth.loading?"Connexion en cours…":"Se connecter avec Google")+'</button>'+
-    (!auth.configured?'<p class="setup-note">Connexion en préparation : le propriétaire doit créer un identifiant OAuth Google et activer YouTube Data API v3.</p>':'')+
-    '</div>';
+    profile='<div class="connect-hero"><div class="google-emblem">G</div><h2>Connexion Google</h2><p class="muted">JabouTude est ouvert à tous les comptes Google. Choisis simplement ton compte pour accéder à ton profil. L’accès aux données YouTube est facultatif.</p>'+
+      '<button class="primary" data-login'+(!auth.configured?' disabled':'')+'>'+(auth.loading?"Connexion en cours…":"Continuer avec Google")+'</button>'+
+      (!auth.configured?'<p class="setup-note">La connexion publique attend l’activation Google OAuth par le propriétaire de JabouTude.</p>':'')+
+      '</div>';
   }
   $("content").innerHTML='<div class="settings account-area">'+profile+
-   (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
-   '<div class="notice"><b>Historique YouTube :</b> Google ne permet pas à une Web App tierce de lire automatiquement la liste complète des vidéos déjà vues. Tu peux afficher l’historique sur YouTube, ou importer tes données Google Takeout.</div>'+
-   '<div class="actions"><a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Historique YouTube ↗</a><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout ↗</a></div>'+
-   (!auth.configured?'<div class="owner-setup"><h2>Activation Google (propriétaire)</h2><p>1. Sur Google Cloud, crée un client OAuth 2.0 de type <b>Application Web</b> et autorise l’origine <code>https://jaboutude-server.onrender.com</code>.</p><p>2. Active <b>YouTube Data API v3</b>, configure l’écran de consentement et ajoute ton adresse comme utilisateur de test si nécessaire.</p><p>3. Dans les variables d’environnement de ton service Render JabouTude, ajoute <code>GOOGLE_CLIENT_ID</code> avec l’identifiant OAuth, puis redéploie.</p><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Ouvrir Google Cloud ↗</a></div>':'')+
+    (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
+    '<div class="notice"><b>Historique :</b> Google ne fournit pas automatiquement à JabouTude la liste de toutes les vidéos déjà regardées. L’historique local et l’import Google Takeout restent indépendants.</div>'+
+    '<div class="actions"><a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Historique YouTube ↗</a><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout ↗</a></div>'+
+    (!auth.configured?'<div class="owner-setup"><h2>Activation publique — administrateur</h2><p>Crée un client OAuth Google de type Application Web avec l’origine autorisée <code>https://jaboutude-server.onrender.com</code>.</p><p>Configure l’audience <b>Externe</b> et publie l’application <b>En production</b> pour tous les comptes Google. Renseigne le Client ID dans la variable Render <code>GOOGLE_CLIENT_ID</code>.</p><p>L’accès facultatif <code>youtube.readonly</code> nécessite YouTube Data API v3 et peut demander une vérification Google, une politique de confidentialité et un domaine vérifiable.</p><a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener noreferrer">Google Cloud Console ↗</a></div>':'')+
+    '<div class="headrow" style="margin-top:25px"><a href="./privacy.html">Confidentialité</a> <a href="./terms.html">Conditions d’utilisation</a></div>'+
   '</div>';
 }
 function refreshAvatar(){
@@ -240,6 +244,8 @@ function renderSettings(){
   $("clearHistory").onclick=()=>{if(confirm("Effacer ton historique enregistré sur cet appareil ?")){state.history=[];save(KEYS.history,[]);renderSettings();}};
 }
 document.addEventListener("click",e=>{
+  const youtube=e.target.closest("[data-connect-youtube]");
+  if(youtube){window.JabouAuth?.connectYoutube().catch(err=>status(err.message));return;}
   const login=e.target.closest("[data-login]");
   if(login){window.JabouAuth?.connect().catch(err=>status(err.message));return;}
   if(e.target.closest("[data-disconnect]")){window.JabouAuth?.disconnect();setTab("account");return;}
