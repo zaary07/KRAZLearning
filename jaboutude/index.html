@@ -1,8 +1,7 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta http-equiv="refresh" content="0; url=https://jaboutude-server.onrender.com/">
-<script>location.replace("https://jaboutude-server.onrender.com/");</script>
+<script>if(location.hostname==="jaboutude-ios.onrender.com")location.replace("https://jaboutude-server.onrender.com/");</script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="JabouTude"><meta name="description" content="Lecteur vidéo et musique personnel pour iOS, avec historique local et favoris.">
@@ -34,6 +33,58 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 #videoPlayer,#audioPlayer{width:100%;background:black;border-radius:13px}#videoPlayer{aspect-ratio:16/9;max-height:65dvh}#audioPlayer{margin:20px 0}.playertext{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin:15px 0}.playertext h2{max-width:730px}.playertext p{margin:7px 0}.playerhelp{color:#b4a4b9;font-size:13px}
 .mobilebar{display:none}.status{font-size:12px;color:#a3aebe;min-height:18px}.click{cursor:pointer}
 @media(max-width:750px){.layout{display:block}.sidebar{display:none}main{padding:15px 15px 95px}.top{margin-bottom:19px}.search{height:46px}.search input{font-size:14px;padding:0 11px}.search button{padding:0 13px}.avatar{height:38px;width:38px}.hero{padding:22px 19px;min-height:150px}.heroglyph{display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 10px}.title{font-size:13px}.subtitle{font-size:11px}.thumb{border-radius:11px}.mobilebar{position:fixed;z-index:20;left:0;right:0;bottom:0;padding-bottom:env(safe-area-inset-bottom);display:flex;background:#13161df7;border-top:1px solid #303441;justify-content:space-around}.mobilebar button{background:none;border:0;color:#a0a5b5;padding:10px 5px;min-width:65px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:3px}.mobilebar button.active{color:#ff5c7f}.mobilebar b{font-size:23px}.playerbackdrop{padding:10px}.playertext{flex-direction:column}#videoPlayer{margin-top:15px}}
+
+/* JabouTude v3 — navigation mobile plus compacte */
+[hidden]{display:none!important}
+.top{align-items:stretch}.search{min-width:0;max-width:700px}.search button{white-space:nowrap;min-width:52px}
+.avatar{flex:0 0 auto;border:0;color:white;overflow:hidden}.avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+.avatar:focus-visible,.nav button:focus-visible,.tile:focus-visible,.mobilebar button:focus-visible{outline:3px solid #fa5679;outline-offset:3px}
+.hero.compact{min-height:0;padding:19px 23px;margin-bottom:17px;background:linear-gradient(115deg,#23202c,#161b24)}
+.hero.compact h1{font-size:clamp(22px,3vw,28px)}.hero.compact .heroglyph{display:none}
+.hero.compact p{font-size:13px;line-height:1.4}
+.quick-links{display:flex;gap:8px;flex-wrap:wrap;margin:-8px 0 24px}
+.quick-links button{border:1px solid #363d49;color:#dce1eb;background:#1d222d;padding:8px 14px;border-radius:999px;font-size:13px}
+.quick-links button:hover{border-color:#fc6080}
+.account-profile{display:flex;align-items:center;gap:15px;margin-bottom:22px}.account-profile strong{font-size:18px}
+.profile-photo{height:60px;width:60px;border-radius:50%;display:grid;place-items:center;object-fit:cover;background:#b92a73}
+.connect-hero{padding:9px 3px 22px;text-align:center}
+.google-emblem{font-size:33px;background:#fff;color:#4285f4;border-radius:50%;height:65px;width:65px;display:grid;place-items:center;margin:8px auto 18px;font-weight:800}
+.connect-hero p{max-width:410px;margin:12px auto 22px}
+.primary:disabled{opacity:.6;cursor:not-allowed}
+.setup-note{font-size:13px;color:#e2b2c0}
+.owner-setup{margin-top:25px;border-top:1px solid #363e4a;padding-top:17px;font-size:13px;line-height:1.6}
+.owner-setup code{color:#fd9bb4;overflow-wrap:anywhere}
+.subscriptions{display:flex;flex-direction:column;gap:8px;margin-top:14px}.subscriptions a{padding:12px;border:1px solid #343a44;border-radius:10px;text-decoration:none;color:#eee}
+.playlist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:12px}
+.playlist-item{background:#1b2130;color:white;border:1px solid #354050;border-radius:14px;min-height:106px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:15px;gap:7px;text-align:left}
+.playlist-item span{color:#fe789a;font-size:24px}.playlist-item small{color:#adb5c2}
+.skeleton-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px}
+.skeleton-card>div{aspect-ratio:16/9;border-radius:12px;background:linear-gradient(100deg,#1b222c 30%,#29323f 45%,#1b222c 60%);background-size:220% 100%;animation:shimmer 1.4s infinite}
+.skeleton-card i{display:block;height:12px;width:90%;background:#252d38;border-radius:4px;margin-top:12px}
+.skeleton-card i:last-child{width:55%}
+@keyframes shimmer{to{background-position-x:-220%}}
+@media (prefers-reduced-motion:reduce){.skeleton-card>div{animation:none}}
+@media(max-width:750px){
+ main{padding-top:13px}
+ .top{gap:8px;margin-bottom:16px}
+ .search{height:45px;border-radius:13px}
+ .search button{padding:0 13px;min-width:45px;font-size:0}
+ .search button::after{content:"⌕";font-size:26px;line-height:1}
+ #settingsTop{padding:11px 12px}
+ .hero{min-height:0;margin-bottom:22px;padding:20px}
+ .hero h1{font-size:26px}
+ .hero.compact{padding:14px 17px}
+ .hero.compact h1{font-size:22px}
+ .hero.compact .eyebrow{margin-bottom:7px}
+ .hero.compact #description{display:none}
+ .quick-links{gap:7px;margin-top:-6px;margin-bottom:22px}
+ .quick-links button{font-size:12px;padding:8px 11px}
+ .grid,.skeleton-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .mobilebar button{min-width:58px;font-size:10px}
+ .mobilebar button b{font-size:23px}
+ .settings{padding:18px 16px}
+}
+
 </style>
 </head>
 <body>
@@ -43,8 +94,9 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <nav class="nav" id="nav">
 <button data-tab="home" class="active"><span>⌂</span> Accueil</button>
 <button data-tab="music"><span>♫</span> Musique</button>
-<button data-tab="favorites"><span>♡</span> Favoris</button>
+<button data-tab="library"><span>▦</span> Bibliothèque</button>
 <button data-tab="history"><span>◷</span> Historique</button>
+<button data-tab="account"><span>◉</span> Compte</button>
 <button data-tab="settings"><span>⚙</span> Paramètres</button>
 </nav>
 <div class="sidebarfoot">PWA indépendante pour iOS.<br>Sans compte obligatoire.<br>Historique conservé localement.</div>
@@ -52,14 +104,15 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <main>
 <header class="top">
 <form id="searchForm" class="search"><input id="searchInput" type="search" placeholder="Rechercher des vidéos, artistes, podcasts…" autocomplete="off" aria-label="Recherche"><button aria-label="Rechercher">⌕ Rechercher</button></form>
-<button class="iconbtn" id="settingsTop" aria-label="Paramètres">⚙</button><div class="avatar" aria-hidden="true">V</div>
+<button class="iconbtn" id="settingsTop" aria-label="Paramètres">⚙</button><button class="avatar account-btn" id="accountBtn" aria-label="Compte Google" title="Compte Google">👤</button>
 </header>
 <section class="hero"><div><div class="eyebrow" id="eyebrow">Ton espace personnel</div><h1 id="heading">Tes vidéos, à ta façon.</h1><p class="muted" id="description">Vidéos et musique dans la même application. Recherche libre, favoris, historique local et lecteur intégré.</p></div><div class="heroglyph">▶♫</div></section>
+<div class="quick-links" id="quickLinks"><button data-q="Actualités France">Actualités</button><button data-q="Musique 2026">Musique</button><button data-q="Technologie">Tech</button><button data-q="Football highlights">Sport</button></div>
 <section id="content"><div class="empty">Chargement des vidéos…</div></section>
 <div class="status" id="status" role="status"></div>
 </main>
 </div>
-<nav class="mobilebar" id="mobilebar"><button data-tab="home" class="active"><b>⌂</b>Accueil</button><button data-tab="music"><b>♫</b>Musique</button><button data-tab="favorites"><b>♡</b>Favoris</button><button data-tab="history"><b>◷</b>Historique</button><button data-tab="settings"><b>⚙</b>Réglages</button></nav>
+<nav class="mobilebar" id="mobilebar"><button data-tab="home" class="active"><b>⌂</b>Accueil</button><button data-tab="music"><b>♫</b>Musique</button><button data-tab="library"><b>▦</b>Bibliothèque</button><button data-tab="history"><b>◷</b>Historique</button><button data-tab="account"><b>◉</b>Compte</button></nav>
 <div class="playerbackdrop" id="playerOverlay" role="dialog" aria-label="Lecteur vidéo">
 <div class="playerpanel">
 <div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><button class="secondary" id="closePlayer">✕ Fermer</button></div>
@@ -69,8 +122,10 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <div id="playerError" class="notice" style="display:none"></div>
 <div class="playertext"><div><h2 id="watchTitle">Chargement…</h2><p class="muted" id="watchAuthor"></p></div><div class="actions"><button class="secondary" id="favCurrent">♡ Favoris</button><button class="secondary" id="shareCurrent">↗ Partager</button></div></div>
 <p class="playerhelp">Lecture depuis des instances communautaires Invidious. Certains flux sont indisponibles ou bloqués par les instances. Le lecteur YouTube de secours peut afficher des publicités. Il n'y a pas de synchronisation de l'historique Google.</p>
+<div class="actions"><button class="secondary" id="directPlayer">Essayer la lecture directe</button></div>
 <button class="secondary" id="openOriginal">Ouvrir la vidéo sur YouTube ↗</button>
 </div></div>
+<script src="./auth.js" defer></script>
 <script src="./app.js" defer></script>
 </body>
 </html>

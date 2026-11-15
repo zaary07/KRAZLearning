@@ -60,6 +60,10 @@ http.createServer(async(req,res)=>{
  try{
   const u=new URL(req.url||'/', 'http://localhost');
   if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
+  if(u.pathname==='/api/config'){
+    const clientId=String(process.env.GOOGLE_CLIENT_ID||'').trim();
+    return json(res,200,{googleConfigured:/^[0-9]+-[a-z0-9-]+\.apps\.googleusercontent\.com$/.test(clientId),googleClientId:clientId});
+  }
   if(u.pathname==='/api/health')return json(res,200,{ok:true,source:'Invidious public instances',historySync:false,server:'JabouTude'});
   if(u.pathname==='/api/trending'){
    const data=await getCached('trending',300000,async()=>{

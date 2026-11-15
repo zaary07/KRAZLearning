@@ -8,6 +8,7 @@ const INSTANCES=[
 const KEYS={history:"jaboutude.history.v1",favs:"jaboutude.favs.v1",instance:"jaboutude.instance.v1"};
 const stored=(k,def)=>{try{return JSON.parse(localStorage.getItem(k))??def}catch{return def}};
 const save=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+let latestRequest=0;
 const state={tab:"home",query:"",playing:null,items:[],history:stored(KEYS.history,[]),favorites:stored(KEYS.favs,[]),api:stored(KEYS.instance,INSTANCES[0].url),busy:false,music:false};
 function h(s){const x=document.createElement("span");x.textContent=String(s??"");return x.innerHTML;}
 function idOf(it){const raw=it?.url||it?.videoId||it?.id||"";const m=String(raw).match(/[?&]v=([\w-]{11})|(?:youtu\.be\/|\/)\b([\w-]{11})\b/);return m?.[1]||m?.[2]||(/^[-\w]{11}$/.test(String(raw))?raw:"");}
@@ -17,12 +18,16 @@ function status(msg){$("status").textContent=msg;}
 function setTitle(eyebrow,title,desc){$("eyebrow").textContent=eyebrow;$("heading").textContent=title;$("description").textContent=desc;}
 function setTab(tab){
   state.tab=tab;state.music=tab==="music";
+  const hero=document.querySelector(".hero");if(hero)hero.classList.toggle("compact",tab!=="home");
+  const quick=$("quickLinks");if(quick)quick.hidden=tab!=="home";
   document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
-  if(tab==="home"){setTitle("Bienvenue","Tes vidéos, à ta façon.","Les tendances et tes recherches, sans configuration ni abonnement à cette application.");loadTrending();}
-  else if(tab==="music"){setTitle("Mode musique","La musique au premier plan.","Recherche un artiste ou un morceau, puis utilise le lecteur audio intégré.");renderMusic();}
-  else if(tab==="favorites"){setTitle("Ta bibliothèque","Favoris enregistrés.","Retrouve tes vidéos préférées, sans connexion Google.");renderList(state.favorites,"Aucun favori pour l'instant.");}
-  else if(tab==="history"){setTitle("Ta bibliothèque","Historique de lecture.","Enregistré dans ce navigateur et non dans l'historique de ton compte YouTube.");renderList(state.history,"Tu n'as pas encore regardé de vidéo.");}
-  else {setTitle("Personnalisation","Paramètres et données.","Choisis ton serveur, sauvegarde ton historique et installe l'application sur iPhone.");renderSettings();}
+  if(tab==="home"){setTitle("À LA UNE","Découvre tes prochaines vidéos.","Un seul endroit pour rechercher, regarder et retrouver tes contenus.");loadTrending();}
+  else if(tab==="music"){setTitle("JABOUTUDE MUSIC","Toute ta musique.","Recherche un artiste, un titre ou colle un lien YouTube Music.");renderMusic();}
+  else if(tab==="library"){setTitle("BIBLIOTHÈQUE","Ta bibliothèque.","Tes favoris locaux et les playlists YouTube de ton compte Google.");renderLibrary();}
+  else if(tab==="favorites"){setTitle("TA BIBLIOTHÈQUE","Tes favoris.","Tes vidéos enregistrées sur cet appareil.");renderList(state.favorites,"Aucun favori pour l'instant.");}
+  else if(tab==="history"){setTitle("HISTORIQUE LOCAL","Vidéos regardées ici.","Ton historique JabouTude, enregistré uniquement sur cet appareil.");renderList(state.history,"Aucune vidéo regardée dans JabouTude.");}
+  else if(tab==="account"){setTitle("MON COMPTE","Compte et YouTube.","Connexion Google, playlists, abonnements et gestion du compte.");renderAccount();}
+  else {setTitle("RÉGLAGES","Paramètres.","Import, export et diagnostic de l’application.");renderSettings();}
 }
 function cards(items){
   return '<div class="grid">'+items.map(item=>'<button class="tile" type="button" data-id="'+h(item.id)+'"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="'+h(item.thumb)+'" alt=""><span class="play">▶</span>'+(item.duration?'<span class="duration">'+time(item.duration)+'</span>':"")+'</div><div class="meta"><div class="title">'+h(item.title)+'</div><div class="subtitle">'+h(item.author)+'</div></div></button>').join("")+'</div>';
@@ -32,9 +37,9 @@ function renderList(items,empty){
   $("content").innerHTML=state.items.length?cards(state.items):'<div class="empty">'+h(empty)+'</div>';
 }
 async function request(path){
-  const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),11500);
+  const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),28000);
   try{
-    const response=await fetch('/api'+path,{headers:{accept:"application/json"},signal:ctrl.signal,credentials:"omit"});
+    const response=await fetch('/api'+path,{headers:{accept:"application/json"},signal:ctrl.signal,credentials:"omit",cache:"default"});
     if(!response.ok){const err=await response.json().catch(()=>({}));throw Error(err.error||"Serveur HTTP "+response.status)}
     return await response.json();
   }finally{clearTimeout(timeout);}
@@ -44,32 +49,37 @@ function fail(msg){
   $("retry").onclick=()=>state.query?search(state.query):loadTrending();
 }
 async function loadTrending(){
-  if(state.busy)return;state.busy=true;status("Chargement des tendances…");
-  $("content").innerHTML='<div class="empty">Chargement des tendances françaises…</div>';
+  const seq=++latestRequest;
+  status("Chargement des tendances…");
+  $("content").innerHTML='<div class="skeleton-grid">'+Array.from({length:8},()=>'<div class="skeleton-card"><div></div><i></i><i></i></div>').join("")+'</div>';
   try{
     const data=await request("/trending");
+    if(seq!==latestRequest || state.tab!=="home")return;
     const items=(Array.isArray(data)?data:[]).map(normal).filter(Boolean);
-    $("content").innerHTML='<div class="headrow"><h2>Tendances du moment</h2><span class="tag">France</span></div>';
-    if(!items.length)throw Error("Cette instance ne renvoie aucune tendance.");
-    renderList(items);status(items.length+" vidéos trouvées");
-  }catch(e){fail(e.message);status("Service tiers temporairement indisponible");}
-  finally{state.busy=false;}
+    if(!items.length)throw Error("Aucune tendance disponible pour le moment.");
+    renderList(items);status(items.length+" vidéos · tendances en France");
+  }catch(e){if(seq!==latestRequest)return;fail(e.message);status("Les tendances ne répondent pas.");}
 }
 async function search(term){
-  state.query=term.trim();if(!state.query)return;
-  state.tab=state.music?"music":"home";
-  const url=getVideoIdFromURL(term);
-  if(url){openVideo({id:url,title:"Vidéo YouTube",author:"Lien importé"});return;}
-  setTitle("Résultats de recherche","Résultats pour « "+state.query+" »","Sélectionne une vidéo pour la regarder ou l'écouter.");
-  $("content").innerHTML='<div class="empty">Recherche en cours…</div>';
-  status("Recherche…");
+  state.query=String(term||"").trim();if(!state.query)return;
+  const seq=++latestRequest;
+  if(getVideoIdFromURL(state.query)){
+    const id=getVideoIdFromURL(state.query);
+    openVideo({id,title:"Vidéo YouTube",author:"Depuis ton lien",thumb:"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg"});
+    return;
+  }
+  if(state.tab!=="music")state.tab="home";
+  document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x.dataset.tab===state.tab));
+  setTitle("RECHERCHE","Résultats pour « "+state.query+" »","Choisis une vidéo. La lecture s'ouvre immédiatement.");
+  $("content").innerHTML='<div class="skeleton-grid">'+Array.from({length:6},()=>'<div class="skeleton-card"><div></div><i></i><i></i></div>').join("")+'</div>';
+  status("Recherche : "+state.query);
   try{
-    const json=await request("/search?q="+encodeURIComponent(state.query)+"&filter=videos");
-    const entries=Array.isArray(json)?json:(json.items||[]);
-    const items=entries.map(normal).filter(Boolean);
-    renderList(items);status(items.length+" résultats");
-    if(!items.length)fail("Aucun résultat disponible.");
-  }catch(e){fail(e.message);status("Erreur de recherche");}
+    const data=await request("/search?q="+encodeURIComponent(state.query));
+    if(seq!==latestRequest)return;
+    const items=(Array.isArray(data)?data:(data.items||[])).map(normal).filter(Boolean);
+    if(!items.length)throw Error("Aucun résultat. Essaie des mots-clés différents.");
+    renderList(items);status(items.length+" résultats disponibles.");
+  }catch(e){if(seq!==latestRequest)return;fail(e.message);status("Recherche indisponible : "+e.message);}
 }
 function getVideoIdFromURL(term){
   try{
@@ -101,39 +111,99 @@ function stopPlayers(){
 }
 function playerMessage(msg){$("playerError").style.display="block";$("playerError").textContent=msg;}
 async function openVideo(it){
-  const id=it.id;if(!/^[-\w]{11}$/.test(id)){status("ID vidéo incorrect");return;}
+  const id=it.id;if(!/^[-\w]{11}$/.test(String(id||""))){status("Identifiant vidéo incorrect");return;}
+  stopPlayers();
   state.playing=it;historyAdd(it);updateFav();
-  $("watchTitle").textContent=it.title;$("watchAuthor").textContent=it.author||"";
-  $("playerOverlay").classList.add("open");$("playerError").style.display="none";
-  stopPlayers();$("watchTitle").textContent="Chargement : "+it.title;
+  $("watchTitle").textContent=it.title||"Vidéo YouTube";
+  $("watchAuthor").textContent=it.author||"";
+  $("playerError").style.display="none";
+  $("playerOverlay").classList.add("open");
+  $("directPlayer").hidden=false;
+  const embed=$("fallbackEmbed");
+  embed.style.display="block";
+  embed.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?playsinline=1&rel=0";
+  status("Lecteur vidéo ouvert.");
+  // L'iframe du lecteur officiel est chargée immédiatement : pas d'attente du backend.
+}
+async function tryDirectPlayer(){
+  const it=state.playing;if(!it)return;
+  const btn=$("directPlayer");btn.disabled=true;btn.textContent="Chargement du flux direct…";
   try{
-    const data=await request("/streams/"+encodeURIComponent(id));
-    const streams=state.music?(data.audioStreams||[]).filter(x=>x.url):((data.videoStreams||[]).filter(x=>!x.videoOnly&&x.url));
-    const chosen=state.music?streams.sort((a,b)=>(b.bitrate||0)-(a.bitrate||0))[0]:streams.sort((a,b)=>(b.height||0)-(a.height||0))[0];
-    const src=chosen?.url||(!state.music&&data.hls?data.hls:null);
-    if(!src)throw Error("Aucun flux "+(state.music?"audio":"vidéo compatible iPhone")+" disponible depuis ce serveur.");
-    const player=state.music?$("audioPlayer"):$("videoPlayer");
-    player.style.display="block";player.src=src;player.onerror=()=>playerMessage("Le flux direct est incompatible avec Safari. Utilise le lecteur YouTube ci-dessous.");
-    $("watchTitle").textContent=data.title||it.title;
-    $("watchAuthor").textContent=data.uploader||it.author||"";
-    const full={...it,title:data.title||it.title,author:data.uploader||it.author||"",thumb:data.thumbnailUrl||it.thumb,duration:data.duration||it.duration};
-    state.playing=full;historyAdd(full);updateFav();
-    player.play().catch(()=>{playerMessage("Appuie sur ▶ dans le lecteur pour démarrer la lecture. iOS exige parfois une interaction directe.");});
-  }catch(e){$("watchTitle").textContent=it.title;playerMessage("Flux direct indisponible : "+e.message+". Le lecteur YouTube ci-dessous peut afficher des publicités.");}
-  if(!state.music){
-    const embed=$("fallbackEmbed");
-    embed.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?playsinline=1&rel=0";
-    embed.style.display="block";
-  }
+    const data=await request("/streams/"+encodeURIComponent(it.id));
+    if(!state.playing||state.playing.id!==it.id)return;
+    const selected=(data.videoStreams||[]).filter(x=>!x.videoOnly&&x.url).sort((a,b)=>(b.height||0)-(a.height||0))[0];
+    const src=selected?.url||data.hls;
+    if(!src)throw Error("Aucun flux direct disponible.");
+    const player=$("videoPlayer");player.style.display="block";player.src=src;
+    player.onerror=()=>playerMessage("Flux direct incompatible avec Safari. Utilise le lecteur YouTube en dessous.");
+    $("fallbackEmbed").style.display="none";$("fallbackEmbed").removeAttribute("src");
+    await player.play().catch(()=>{playerMessage("Appuie sur ▶ dans le lecteur pour démarrer.");});
+  }catch(e){playerMessage(e.message+" Le lecteur intégré reste disponible.");}
+  finally{btn.disabled=false;btn.textContent="Essayer la lecture directe";}
 }
 function settingsHtml(){return '<div class="settings">'+
-'<h2>Connexion et historique Google</h2><p class="muted">La connexion Google dans un lecteur tiers ne permet pas de synchroniser automatiquement l’historique YouTube. Tu peux voir ton historique officiel et importer une sauvegarde Google Takeout. JabouTude ne demande jamais ton mot de passe Google.</p>'+
-'<div class="actions"><a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Mon historique YouTube ↗</a><a class="secondary" href="https://takeout.google.com/settings/takeout" target="_blank" rel="noopener noreferrer">Google Takeout ↗</a></div>'+
-'<h2 style="margin-top:25px">Connexion aux vidéos</h2><p class="muted">Recherche via un serveur JabouTude relayant des instances publiques Invidious. Les flux peuvent être temporairement indisponibles.</p><button class="secondary" id="testServer">Tester la connexion</button>'+
-'<h2 style="margin-top:25px">Historique et favoris</h2><p class="muted">'+state.history.length+' éléments d’historique · '+state.favorites.length+' favoris.</p>'+
-'<div class="actions"><button class="secondary" id="exportData">Exporter mes données</button><button class="secondary" id="importData">Importer JSON</button><input type="file" id="importInput" accept=".json,application/json" hidden><button class="secondary" id="clearHistory">Effacer l’historique</button></div>'+
-'<div class="notice">Pour installer sur iPhone : Safari → Partager → Sur l’écran d’accueil → Ajouter. Le lecteur YouTube de secours peut afficher des publicités.</div>'+
-'<p class="muted" style="font-size:12px">Projet indépendant non affilié à YouTube ou ReVanced.</p></div>';}
+'<h2>Compte Google</h2><p class="muted">Connecte-toi depuis l’onglet Compte pour accéder aux playlists et abonnements lorsque l’authentification Google sera configurée.</p><button class="primary" data-tab="account">Ouvrir le compte</button>'+
+'<h2 style="margin-top:24px">Historique local</h2><p class="muted">'+state.history.length+' vidéos consultées · '+state.favorites.length+' favoris</p>'+
+'<div class="actions"><button class="secondary" id="exportData">Exporter</button><button class="secondary" id="importData">Importer un JSON</button><input type="file" id="importInput" accept=".json,application/json" hidden><button class="secondary" id="clearHistory">Effacer l’historique</button></div>'+
+'<div class="notice"><b>Importer ton historique YouTube :</b> exporte « YouTube et YouTube Music » au format JSON dans <a href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout</a>, puis importe watch-history.json ici. Cela reste une copie locale, pas une synchronisation permanente.</div>'+
+'<h2 style="margin-top:24px">Diagnostic</h2><button class="secondary" id="testServer">Tester la connexion vidéo</button>'+
+'<div class="notice">Le serveur gratuit peut se mettre en veille, ce qui ralentit la première ouverture. La connexion aux flux vidéo dépend des services disponibles.</div></div>';}
+
+function renderLibrary(){
+  const auth=window.JabouAuth?.state;
+  const pls=auth?.profile?auth.playlists:[];
+  const body=pls.length?'<div class="playlist-grid">'+pls.map(x=>'<button class="playlist-item" data-playlist="'+h(x.id)+'"><span>♫</span><strong>'+h(x.snippet?.title||"Playlist")+'</strong><small>'+h(x.contentDetails?.itemCount||0)+' vidéos</small></button>').join("")+'</div>':
+      '<div class="notice">'+(auth?.profile?"Aucune playlist accessible depuis ce compte.":"Connecte ton compte Google pour retrouver tes playlists YouTube lorsqu’OAuth est activé.")+'</div>';
+  const fav=state.favorites.filter(x=>x?.id);
+  state.items=fav;
+  $("content").innerHTML='<div class="headrow"><h2>Mes favoris</h2><span class="tag">'+fav.length+'</span></div>'+
+  (fav.length?cards(fav):'<div class="empty">Aucun favori pour l’instant. Ouvre une vidéo et touche ♡.</div>')+
+  '<div class="headrow" style="margin-top:28px"><h2>Playlists YouTube</h2><button class="secondary" data-tab="account">Mon compte</button></div>'+body;
+}
+function renderAccount(){
+  const auth=window.JabouAuth?.state;
+  if(!auth){$("content").innerHTML='<div class="empty">Initialisation du compte…</div>';return;}
+  const p=auth.profile;
+  let profile="";
+  if(p){
+    const pic=/^https:\/\//.test(p.picture||"")?'<img class="profile-photo" src="'+h(p.picture)+'" alt="">':'<span class="profile-photo">✓</span>';
+    profile='<div class="account-profile">'+pic+'<div><strong>'+h(p.name||p.email||"Compte Google")+'</strong><div class="muted">'+h(p.email||"Compte connecté")+'</div></div></div>'+
+    '<div class="actions"><button class="secondary" data-disconnect>Se déconnecter</button><button class="secondary" data-tab="library">Mes playlists</button></div>'+
+    '<div class="headrow"><h2>Mes abonnements</h2><span class="tag">'+auth.subscriptions.length+'</span></div>'+
+    (auth.subscriptions.length?'<div class="subscriptions">'+auth.subscriptions.map(x=>'<a href="https://www.youtube.com/channel/'+encodeURIComponent(x.snippet?.resourceId?.channelId||"")+'" target="_blank" rel="noopener noreferrer">'+h(x.snippet?.title||"Chaîne YouTube")+' ↗</a>').join("")+'</div>':'<p class="muted">Aucun abonnement accessible ou YouTube Data API non activée.</p>');
+  }else{
+    profile='<div class="connect-hero"><div class="google-emblem">G</div><h2>Ton compte Google</h2><p class="muted">Retrouve ta photo de profil, tes playlists et tes abonnements YouTube avec une connexion officielle et tes autorisations.</p>'+
+    '<button class="primary" data-login'+(!auth.configured?' disabled':'')+'>'+(auth.loading?"Connexion en cours…":"Se connecter avec Google")+'</button>'+
+    (!auth.configured?'<p class="setup-note">Connexion en préparation : le propriétaire doit créer un identifiant OAuth Google et activer YouTube Data API v3.</p>':'')+
+    '</div>';
+  }
+  $("content").innerHTML='<div class="settings account-area">'+profile+
+   (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
+   '<div class="notice"><b>Historique YouTube :</b> Google ne permet pas à une Web App tierce de lire automatiquement la liste complète des vidéos déjà vues. Tu peux afficher l’historique sur YouTube, ou importer tes données Google Takeout.</div>'+
+   '<div class="actions"><a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Historique YouTube ↗</a><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout ↗</a></div>'+
+   (!auth.configured?'<div class="owner-setup"><h2>Activation Google (propriétaire)</h2><p>1. Sur Google Cloud, crée un client OAuth 2.0 de type <b>Application Web</b> et autorise l’origine <code>https://jaboutude-server.onrender.com</code>.</p><p>2. Active <b>YouTube Data API v3</b>, configure l’écran de consentement et ajoute ton adresse comme utilisateur de test si nécessaire.</p><p>3. Dans les variables d’environnement de ton service Render JabouTude, ajoute <code>GOOGLE_CLIENT_ID</code> avec l’identifiant OAuth, puis redéploie.</p><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Ouvrir Google Cloud ↗</a></div>':'')+
+  '</div>';
+}
+function refreshAvatar(){
+  const btn=$("accountBtn"),a=window.JabouAuth?.state;if(!btn)return;
+  const p=a?.profile;
+  if(p&&/^https:\/\//.test(p.picture||"")){
+    btn.textContent="";const img=document.createElement("img");img.src=p.picture;img.alt="Compte Google";btn.appendChild(img);
+  }else btn.textContent="👤";
+  btn.title=p?"Compte Google : "+(p.name||p.email||"Connecté"):"Compte Google";
+}
+async function showPlaylist(id){
+  if(!window.JabouAuth?.state?.profile){setTab("account");return;}
+  const seq=++latestRequest;
+  $("content").innerHTML='<div class="empty">Chargement de ta playlist Google…</div>';
+  try{
+    const videos=await window.JabouAuth.playlistItems(id);
+    if(seq!==latestRequest)return;
+    setTitle("PLAYLIST YOUTUBE","Ta playlist","Vidéo(s) issues de ton compte Google.");
+    renderList(videos,"Cette playlist est vide, privée ou inaccessible.");
+  }catch(e){$("content").innerHTML='<div class="notice">'+h(e.message)+'</div>';}
+}
+
 function renderSettings(){
   $("content").innerHTML=settingsHtml();
   $("testServer").onclick=async()=>{
@@ -170,6 +240,11 @@ function renderSettings(){
   $("clearHistory").onclick=()=>{if(confirm("Effacer ton historique enregistré sur cet appareil ?")){state.history=[];save(KEYS.history,[]);renderSettings();}};
 }
 document.addEventListener("click",e=>{
+  const login=e.target.closest("[data-login]");
+  if(login){window.JabouAuth?.connect().catch(err=>status(err.message));return;}
+  if(e.target.closest("[data-disconnect]")){window.JabouAuth?.disconnect();setTab("account");return;}
+  const pl=e.target.closest("[data-playlist]");
+  if(pl){showPlaylist(pl.dataset.playlist);return;}
   const tab=e.target.closest("[data-tab]");if(tab){setTab(tab.dataset.tab);return;}
   const tile=e.target.closest("[data-id]");if(tile){
     const it=state.items.find(x=>x.id===tile.dataset.id);if(it)openVideo(it);return;
@@ -178,6 +253,8 @@ document.addEventListener("click",e=>{
 });
 $("searchForm").onsubmit=e=>{e.preventDefault();search($("searchInput").value)};
 $("settingsTop").onclick=()=>setTab("settings");
+$("accountBtn").onclick=()=>setTab("account");
+$("directPlayer").onclick=()=>tryDirectPlayer();
 $("closePlayer").onclick=()=>{$("playerOverlay").classList.remove("open");stopPlayers()};
 $("favCurrent").onclick=()=>{if(state.playing)toggleFav(state.playing)};
 $("shareCurrent").onclick=async()=>{
@@ -189,4 +266,10 @@ $("shareCurrent").onclick=async()=>{
 $("openOriginal").onclick=()=>{if(state.playing)window.open("https://www.youtube.com/watch?v="+state.playing.id,"_blank","noopener")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("playerOverlay").classList.contains("open")){$("closePlayer").click()}});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
+window.JabouAuth?.subscribe(a=>{
+  refreshAvatar();
+  if(state.tab==="account")renderAccount();
+  if(state.tab==="library")renderLibrary();
+});
+window.JabouAuth?.init();
 setTab("home");
