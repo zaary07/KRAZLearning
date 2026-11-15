@@ -34,8 +34,8 @@ function renderList(items,empty){
 async function request(path){
   const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),11500);
   try{
-    const response=await fetch(state.api+path,{headers:{accept:"application/json"},signal:ctrl.signal,credentials:"omit"});
-    if(!response.ok)throw Error("Serveur HTTP "+response.status);
+    const response=await fetch('/api'+path,{headers:{accept:"application/json"},signal:ctrl.signal,credentials:"omit"});
+    if(!response.ok){const err=await response.json().catch(()=>({}));throw Error(err.error||"Serveur HTTP "+response.status)}
     return await response.json();
   }finally{clearTimeout(timeout);}
 }
@@ -47,7 +47,7 @@ async function loadTrending(){
   if(state.busy)return;state.busy=true;status("Chargement des tendances…");
   $("content").innerHTML='<div class="empty">Chargement des tendances françaises…</div>';
   try{
-    const data=await request("/trending?region=FR");
+    const data=await request("/trending");
     const items=(Array.isArray(data)?data:[]).map(normal).filter(Boolean);
     $("content").innerHTML='<div class="headrow"><h2>Tendances du moment</h2><span class="tag">France</span></div>';
     if(!items.length)throw Error("Cette instance ne renvoie aucune tendance.");
@@ -94,6 +94,7 @@ function historyAdd(it){
   save(KEYS.history,state.history);
 }
 function stopPlayers(){
+  const embed=$("fallbackEmbed");if(embed){embed.removeAttribute("src");embed.style.display="none";}
   for(const player of [$("videoPlayer"),$("audioPlayer")]){
     player.pause();player.removeAttribute("src");player.load();player.style.display="none";
   }
@@ -112,35 +113,33 @@ async function openVideo(it){
     const src=chosen?.url||(!state.music&&data.hls?data.hls:null);
     if(!src)throw Error("Aucun flux "+(state.music?"audio":"vidéo compatible iPhone")+" disponible depuis ce serveur.");
     const player=state.music?$("audioPlayer"):$("videoPlayer");
-    player.style.display="block";player.src=src;player.onerror=()=>playerMessage("Ce flux n'est pas lisible ici. Essaie un autre serveur depuis les paramètres. Les flux des instances tierces sont instables.");
+    player.style.display="block";player.src=src;player.onerror=()=>playerMessage("Le flux direct est incompatible avec Safari. Utilise le lecteur YouTube ci-dessous.");
     $("watchTitle").textContent=data.title||it.title;
     $("watchAuthor").textContent=data.uploader||it.author||"";
     const full={...it,title:data.title||it.title,author:data.uploader||it.author||"",thumb:data.thumbnailUrl||it.thumb,duration:data.duration||it.duration};
     state.playing=full;historyAdd(full);updateFav();
     player.play().catch(()=>{playerMessage("Appuie sur ▶ dans le lecteur pour démarrer la lecture. iOS exige parfois une interaction directe.");});
-  }catch(e){ $("watchTitle").textContent=it.title;playerMessage("Impossible de lire cette vidéo : "+e.message);}
+  }catch(e){$("watchTitle").textContent=it.title;playerMessage("Flux direct indisponible : "+e.message+". Le lecteur YouTube ci-dessous peut afficher des publicités.");}
+  if(!state.music){
+    const embed=$("fallbackEmbed");
+    embed.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?playsinline=1&rel=0";
+    embed.style.display="block";
+  }
 }
 function settingsHtml(){return '<div class="settings">'+
-'<h2>Serveur de lecture</h2><p class="muted">Ce service utilise des instances communautaires indépendantes. Elles peuvent être hors ligne, limiter leur API ou refuser les vidéos.</p>'+
-'<label for="instance">Instance Piped</label><select id="instance">'+INSTANCES.map(x=>'<option value="'+h(x.url)+'" '+(x.url===state.api?"selected":"")+'>'+h(x.name)+'</option>').join("")+'</select>'+
-'<label for="customApi">Ou URL HTTPS personnalisée</label><input type="url" id="customApi" placeholder="https://mon-instance.example">'+
-'<div class="actions" style="margin-top:12px"><button class="primary" id="applyServer">Enregistrer le serveur</button><button class="secondary" id="testServer">Tester la connexion</button></div>'+
-'<div class="notice"><b>Compte Google :</b> non connecté. Cette PWA ne récupère pas les identifiants Google. L’API YouTube officielle ne donne pas accès à l’historique complet de visionnage. Tes données sont conservées localement dans ce navigateur.</div>'+
-'<h2 style="margin-top:25px">Historique et favoris</h2><p class="muted">'+state.history.length+" éléments d'historique · "+state.favorites.length+" favoris.</p>"+
+'<h2>Connexion et historique Google</h2><p class="muted">La connexion Google dans un lecteur tiers ne permet pas de synchroniser automatiquement l’historique YouTube. Tu peux voir ton historique officiel et importer une sauvegarde Google Takeout. JabouTude ne demande jamais ton mot de passe Google.</p>'+
+'<div class="actions"><a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Mon historique YouTube ↗</a><a class="secondary" href="https://takeout.google.com/settings/takeout" target="_blank" rel="noopener noreferrer">Google Takeout ↗</a></div>'+
+'<h2 style="margin-top:25px">Connexion aux vidéos</h2><p class="muted">Recherche via un serveur JabouTude relayant des instances publiques Invidious. Les flux peuvent être temporairement indisponibles.</p><button class="secondary" id="testServer">Tester la connexion</button>'+
+'<h2 style="margin-top:25px">Historique et favoris</h2><p class="muted">'+state.history.length+' éléments d’historique · '+state.favorites.length+' favoris.</p>'+
 '<div class="actions"><button class="secondary" id="exportData">Exporter mes données</button><button class="secondary" id="importData">Importer JSON</button><input type="file" id="importInput" accept=".json,application/json" hidden><button class="secondary" id="clearHistory">Effacer l’historique</button></div>'+
-'<div class="notice"><b>Installer sur iPhone :</b> ouvre ce site dans Safari → bouton Partager → « Sur l’écran d’accueil » → « Ajouter ». La lecture en arrière-plan dépend du navigateur et des restrictions iOS.</div>'+
-'<p class="muted" style="font-size:12px">Projet personnel indépendant. Ni YouTube ni ReVanced ne sont affiliés à cette application. Les flux peuvent contenir des annonces intégrées à la vidéo par son auteur. Aucune annonce n’est injectée par JabouTude.</p></div>';}
+'<div class="notice">Pour installer sur iPhone : Safari → Partager → Sur l’écran d’accueil → Ajouter. Le lecteur YouTube de secours peut afficher des publicités.</div>'+
+'<p class="muted" style="font-size:12px">Projet indépendant non affilié à YouTube ou ReVanced.</p></div>';}
 function renderSettings(){
   $("content").innerHTML=settingsHtml();
-  $("applyServer").onclick=()=>{
-    const manual=$("customApi").value.trim().replace(/\/$/,""),chosen=manual||$("instance").value;
-    if(!/^https:\/\/[^\s/]+$/.test(chosen)){alert("Indique une adresse HTTPS valide sans chemin.");return;}
-    state.api=chosen;save(KEYS.instance,chosen);status("Serveur enregistré : "+chosen);
-  };
   $("testServer").onclick=async()=>{
-    status("Test du serveur…");
-    try{const res=await request("/trending?region=FR");status(Array.isArray(res)?"Serveur accessible : "+res.length+" vidéos.":"Réponse inattendue du serveur.");}
-    catch(e){status("Serveur indisponible : "+e.message);}
+    status("Vérification du serveur…");
+    try{const info=await request("/health");status(info.ok?"Serveur JabouTude disponible.":"Serveur indisponible.");}
+    catch(e){status("Connexion impossible : "+e.message);}
   };
   $("exportData").onclick=()=>{
     const data={version:1,history:state.history,favorites:state.favorites,exportedAt:new Date().toISOString()};

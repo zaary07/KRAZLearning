@@ -62,10 +62,11 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <div class="playerpanel">
 <div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><button class="secondary" id="closePlayer">✕ Fermer</button></div>
 <video id="videoPlayer" controls playsinline preload="metadata" style="display:none"></video>
+<iframe id="fallbackEmbed" title="Lecteur YouTube de secours" style="display:none;width:100%;aspect-ratio:16/9;border:0;border-radius:14px;margin:12px 0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 <audio id="audioPlayer" controls preload="metadata" style="display:none"></audio>
 <div id="playerError" class="notice" style="display:none"></div>
 <div class="playertext"><div><h2 id="watchTitle">Chargement…</h2><p class="muted" id="watchAuthor"></p></div><div class="actions"><button class="secondary" id="favCurrent">♡ Favoris</button><button class="secondary" id="shareCurrent">↗ Partager</button></div></div>
-<p class="playerhelp">Lecture depuis des instances communautaires Piped. Certains flux sont indisponibles ou bloqués par les instances. Aucune publicité n'est ajoutée par cette PWA. Il n'y a pas de synchronisation de l'historique Google.</p>
+<p class="playerhelp">Lecture depuis des instances communautaires Invidious. Certains flux sont indisponibles ou bloqués par les instances. Le lecteur YouTube de secours peut afficher des publicités. Il n'y a pas de synchronisation de l'historique Google.</p>
 <button class="secondary" id="openOriginal">Ouvrir la vidéo sur YouTube ↗</button>
 </div></div>
 <script src="./app.js" defer></script>
