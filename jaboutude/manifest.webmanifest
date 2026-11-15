@@ -1,0 +1,18 @@
+{
+  "name": "JabouTude — Vidéo & Musique",
+  "short_name": "JabouTude",
+  "description": "PWA personnelle vidéo et musique, historique local et favoris.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

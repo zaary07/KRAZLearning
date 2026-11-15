@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JabouTude"><meta name="description" content="Lecteur vidéo et musique personnel pour iOS, avec historique local et favoris.">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="icon" type="image/svg+xml" href="./icon.svg">
+<title>JabouTude — Vidéo & Musique</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,Inter,"Segoe UI",sans-serif;background:#0b0d12;color:#f7f8fa}
+*{box-sizing:border-box}body{margin:0;background:#0b0d12}button,input,select{font:inherit}button{cursor:pointer}a{color:#aebcf9}
+.layout{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:100dvh}.sidebar{border-right:1px solid #272c37;padding:25px 14px;background:#11141b;position:sticky;top:0;height:100dvh}
+.brand{display:flex;align-items:center;gap:11px;padding:2px 12px 28px;font-size:20px;font-weight:820;letter-spacing:-.7px}.brand-icon{height:33px;width:33px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(135deg,#fa4967,#ac2dd2);box-shadow:0 6px 22px #f9396344}
+.nav{display:flex;flex-direction:column;gap:8px}.nav button{display:flex;gap:13px;align-items:center;text-align:left;border:0;border-radius:12px;background:none;color:#bbc2d1;padding:13px 14px;font-weight:650;font-size:15px}
+.nav button.active,.nav button:hover{background:#292334;color:#fff}.nav button.active::before{content:'';background:#f13d68;width:3px;height:20px;position:absolute;left:14px;border-radius:5px}
+.sidebarfoot{position:absolute;bottom:22px;padding:0 12px;color:#8d94a6;font-size:12px;line-height:1.7}
+main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{display:flex;align-items:center;gap:14px;margin-bottom:26px}.search{display:flex;align-items:center;flex:1;border:1px solid #303744;border-radius:16px;overflow:hidden;background:#181c24;height:50px}
+.search input{background:transparent;border:0;outline:0;color:#fff;width:100%;padding:0 18px;font-size:15px}
+.search button{background:#282e39;border:0;color:#fff;height:100%;padding:0 18px;font-weight:700}
+.iconbtn{border:1px solid #303744;background:#1b2029;color:#f9f9f9;border-radius:13px;padding:13px 16px}.avatar{display:grid;place-items:center;height:43px;width:43px;border-radius:50%;background:linear-gradient(145deg,#873ec3,#ff4c80);font-weight:800}
+.hero{padding:27px 28px 30px;border:1px solid #37303b;border-radius:22px;background:radial-gradient(ellipse at 86% 10%,#5a2c60 0,transparent 50%),linear-gradient(115deg,#251c2c,#171b25);display:flex;align-items:center;justify-content:space-between;margin-bottom:27px;min-height:173px}
+.eyebrow{text-transform:uppercase;color:#ff9bb0;letter-spacing:1.8px;font-size:11px;font-weight:800;margin:0 0 10px}h1{font-size:clamp(25px,3vw,39px);margin:0 0 9px;letter-spacing:-.8px}p{line-height:1.55}.muted{color:#a2a9b7}.hero p{margin:0;font-size:14px;max-width:680px}.heroglyph{font-size:58px;opacity:.65;padding-right:12px}
+.headrow{display:flex;justify-content:space-between;align-items:center;margin:22px 0 17px;gap:12px}h2{font-size:22px;letter-spacing:-.5px;margin:0}.tag{font-size:12px;padding:6px 10px;background:#242c38;color:#b6c1d3;border-radius:999px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(223px,1fr));gap:21px 17px}.tile{border:0;background:transparent;color:inherit;text-align:left;padding:0;min-width:0}
+.thumb{position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:linear-gradient(115deg,#283044,#151f30)}.thumb img{height:100%;width:100%;object-fit:cover}.thumb .play{position:absolute;inset:0;display:grid;place-items:center;font-size:30px;color:#fff;opacity:0;background:#0006;transition:opacity .14s}.tile:hover .play{opacity:1}
+.meta{padding:11px 2px 0}.title{font-weight:750;font-size:14px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.subtitle{font-size:12px;color:#a4abb9;margin-top:5px;line-height:1.5}.duration{position:absolute;right:9px;bottom:9px;background:#050505c9;padding:3px 6px;border-radius:5px;font-size:11px;font-weight:720}
+.empty{border:1px dashed #3b414d;border-radius:18px;padding:36px 22px;text-align:center;color:#b3b8c4}
+.actions{display:flex;gap:10px;flex-wrap:wrap}.primary{background:#fa456d;border:0;border-radius:12px;color:white;padding:12px 16px;font-weight:730}.secondary{background:#202733;border:1px solid #3b4352;border-radius:12px;color:white;padding:11px 15px;font-weight:650}
+.settings{border:1px solid #353945;border-radius:17px;padding:22px;background:#171b24;max-width:680px}.settings label{display:block;margin:16px 0 8px;font-weight:650}.settings select,.settings input{display:block;width:100%;background:#0c1017;color:white;border:1px solid #3d4657;border-radius:10px;padding:12px}
+.notice{margin:18px 0;padding:15px 16px;border-left:3px solid #f34e74;background:#2d2330;border-radius:9px;font-size:13px;line-height:1.7;color:#e7d5df}
+.playerbackdrop{position:fixed;inset:0;z-index:100;background:#090b10ed;overflow:auto;backdrop-filter:blur(18px);padding:25px;display:none}.playerbackdrop.open{display:block}.playerpanel{max-width:1100px;margin:0 auto}.watchtop{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}
+#videoPlayer,#audioPlayer{width:100%;background:black;border-radius:13px}#videoPlayer{aspect-ratio:16/9;max-height:65dvh}#audioPlayer{margin:20px 0}.playertext{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin:15px 0}.playertext h2{max-width:730px}.playertext p{margin:7px 0}.playerhelp{color:#b4a4b9;font-size:13px}
+.mobilebar{display:none}.status{font-size:12px;color:#a3aebe;min-height:18px}.click{cursor:pointer}
+@media(max-width:750px){.layout{display:block}.sidebar{display:none}main{padding:15px 15px 95px}.top{margin-bottom:19px}.search{height:46px}.search input{font-size:14px;padding:0 11px}.search button{padding:0 13px}.avatar{height:38px;width:38px}.hero{padding:22px 19px;min-height:150px}.heroglyph{display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 10px}.title{font-size:13px}.subtitle{font-size:11px}.thumb{border-radius:11px}.mobilebar{position:fixed;z-index:20;left:0;right:0;bottom:0;padding-bottom:env(safe-area-inset-bottom);display:flex;background:#13161df7;border-top:1px solid #303441;justify-content:space-around}.mobilebar button{background:none;border:0;color:#a0a5b5;padding:10px 5px;min-width:65px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:3px}.mobilebar button.active{color:#ff5c7f}.mobilebar b{font-size:23px}.playerbackdrop{padding:10px}.playertext{flex-direction:column}#videoPlayer{margin-top:15px}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+<div class="brand"><span class="brand-icon">▶</span>JabouTude</div>
+<nav class="nav" id="nav">
+<button data-tab="home" class="active"><span>⌂</span> Accueil</button>
+<button data-tab="music"><span>♫</span> Musique</button>
+<button data-tab="favorites"><span>♡</span> Favoris</button>
+<button data-tab="history"><span>◷</span> Historique</button>
+<button data-tab="settings"><span>⚙</span> Paramètres</button>
+</nav>
+<div class="sidebarfoot">PWA indépendante pour iOS.<br>Sans compte obligatoire.<br>Historique conservé localement.</div>
+</aside>
+<main>
+<header class="top">
+<form id="searchForm" class="search"><input id="searchInput" type="search" placeholder="Rechercher des vidéos, artistes, podcasts…" autocomplete="off" aria-label="Recherche"><button aria-label="Rechercher">⌕ Rechercher</button></form>
+<button class="iconbtn" id="settingsTop" aria-label="Paramètres">⚙</button><div class="avatar" aria-hidden="true">V</div>
+</header>
+<section class="hero"><div><div class="eyebrow" id="eyebrow">Ton espace personnel</div><h1 id="heading">Tes vidéos, à ta façon.</h1><p class="muted" id="description">Vidéos et musique dans la même application. Recherche libre, favoris, historique local et lecteur intégré.</p></div><div class="heroglyph">▶♫</div></section>
+<section id="content"><div class="empty">Chargement des vidéos…</div></section>
+<div class="status" id="status" role="status"></div>
+</main>
+</div>
+<nav class="mobilebar" id="mobilebar"><button data-tab="home" class="active"><b>⌂</b>Accueil</button><button data-tab="music"><b>♫</b>Musique</button><button data-tab="favorites"><b>♡</b>Favoris</button><button data-tab="history"><b>◷</b>Historique</button><button data-tab="settings"><b>⚙</b>Réglages</button></nav>
+<div class="playerbackdrop" id="playerOverlay" role="dialog" aria-label="Lecteur vidéo">
+<div class="playerpanel">
+<div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><button class="secondary" id="closePlayer">✕ Fermer</button></div>
+<video id="videoPlayer" controls playsinline preload="metadata" style="display:none"></video>
+<audio id="audioPlayer" controls preload="metadata" style="display:none"></audio>
+<div id="playerError" class="notice" style="display:none"></div>
+<div class="playertext"><div><h2 id="watchTitle">Chargement…</h2><p class="muted" id="watchAuthor"></p></div><div class="actions"><button class="secondary" id="favCurrent">♡ Favoris</button><button class="secondary" id="shareCurrent">↗ Partager</button></div></div>
+<p class="playerhelp">Lecture depuis des instances communautaires Piped. Certains flux sont indisponibles ou bloqués par les instances. Aucune publicité n'est ajoutée par cette PWA. Il n'y a pas de synchronisation de l'historique Google.</p>
+<button class="secondary" id="openOriginal">Ouvrir la vidéo sur YouTube ↗</button>
+</div></div>
+<script src="./app.js" defer></script>
+</body>
+</html>
