@@ -55,7 +55,7 @@ function fromUpstream(v,host){
  const hls=/^https:\/\//.test(v.hlsUrl||'')?v.hlsUrl:null;
  return {title,uploader:author,author,thumbnailUrl:thumbs.find(x=>x.quality==='high')?.url||thumbs[0]?.url||'',duration:v.lengthSeconds||0,videoStreams:streams,audioStreams:audio,hls,source:host};
 }
-const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json','.json':'application/json'};
+const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webp':'image/webp','.png':'image/png','.webmanifest':'application/manifest+json','.json':'application/json'};
 http.createServer(async(req,res)=>{
  try{
   const u=new URL(req.url||'/', 'http://localhost');
