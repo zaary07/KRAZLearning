@@ -1,7 +1,7 @@
 {
-  "name": "JabouTude — Vidéo & Musique",
-  "short_name": "JabouTude",
-  "description": "PWA personnelle vidéo et musique, historique local et favoris.",
+  "name": "JabouTube — Vidéo & Musique",
+  "short_name": "JabouTube",
+  "description": "Application vidéo et musique JabouTube pour iPhone et Android",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -9,15 +9,15 @@
   "theme_color": "#050915",
   "icons": [
     {
-      "src": "./jaboutude-icon.webp",
+      "src": "./jaboutube-icon-192.webp",
       "sizes": "192x192",
       "type": "image/webp",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "./icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "./jaboutube-icon-512.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
       "purpose": "any"
     }
   ]

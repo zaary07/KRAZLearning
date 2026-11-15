@@ -5,8 +5,8 @@ const INSTANCES=[
   {name:"Piped leptons.xyz",url:"https://pipedapi.leptons.xyz"},
   {name:"Piped nosebs.ru",url:"https://pipedapi.nosebs.ru"}
 ];
-const KEYS={history:"jaboutude.history.v1",favs:"jaboutude.favs.v1",instance:"jaboutude.instance.v1"};
-const stored=(k,def)=>{try{return JSON.parse(localStorage.getItem(k))??def}catch{return def}};
+const KEYS={history:"jaboutube.history.v1",favs:"jaboutube.favs.v1",instance:"jaboutube.instance.v1"};
+const stored=(k,def)=>{try{const current=localStorage.getItem(k);const legacy=k.replace(/^jaboutube\./,"jaboutude.");return JSON.parse(current??localStorage.getItem(legacy))??def}catch{return def}};
 const save=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 let latestRequest=0;
 const state={tab:"home",query:"",playing:null,items:[],history:stored(KEYS.history,[]),favorites:stored(KEYS.favs,[]),api:stored(KEYS.instance,INSTANCES[0].url),busy:false,music:false};
@@ -25,7 +25,7 @@ function setTab(tab){
   else if(tab==="music"){setTitle("JABOUTUDE MUSIC","Toute ta musique.","Recherche un artiste, un titre ou colle un lien YouTube Music.");renderMusic();}
   else if(tab==="library"){setTitle("BIBLIOTHÈQUE","Ta bibliothèque.","Tes favoris locaux et les playlists YouTube de ton compte Google.");renderLibrary();}
   else if(tab==="favorites"){setTitle("TA BIBLIOTHÈQUE","Tes favoris.","Tes vidéos enregistrées sur cet appareil.");renderList(state.favorites,"Aucun favori pour l'instant.");}
-  else if(tab==="history"){setTitle("HISTORIQUE LOCAL","Vidéos regardées ici.","Ton historique JabouTude, enregistré uniquement sur cet appareil.");renderList(state.history,"Aucune vidéo regardée dans JabouTude.");}
+  else if(tab==="history"){setTitle("HISTORIQUE LOCAL","Vidéos regardées ici.","Ton historique JabouTube, enregistré uniquement sur cet appareil.");renderList(state.history,"Aucune vidéo regardée dans JabouTube.");}
   else if(tab==="account"){setTitle("MON COMPTE","Compte et YouTube.","Connexion Google, playlists, abonnements et gestion du compte.");renderAccount();}
   else {setTitle("RÉGLAGES","Paramètres.","Import, export et diagnostic de l’application.");renderSettings();}
 }
@@ -169,20 +169,20 @@ function renderAccount(){
     const pic=/^https:\/\//.test(p.picture||"")?'<img class="profile-photo" src="'+h(p.picture)+'" alt="Photo Google">':'<span class="profile-photo">✓</span>';
     const yt=auth.youtubeConnected?
       '<div class="notice"><b>YouTube connecté</b> · Tes playlists et abonnements sont accessibles avec les autorisations accordées.</div>':
-      '<div class="notice">Ton compte Google est connecté. Pour récupérer tes playlists et abonnements, autorise séparément la lecture de ton compte YouTube. Cette autorisation peut nécessiter la validation de JabouTude par Google.</div><button class="primary" data-connect-youtube>Connecter mes playlists YouTube</button>';
+      '<div class="notice">Ton compte Google est connecté. Pour récupérer tes playlists et abonnements, autorise séparément la lecture de ton compte YouTube. Cette autorisation peut nécessiter la validation de JabouTube par Google.</div><button class="primary" data-connect-youtube>Connecter mes playlists YouTube</button>';
     profile='<div class="account-profile">'+pic+'<div><strong>'+h(p.name||p.email||"Compte Google")+'</strong><div class="muted">'+h(p.email||"Compte connecté")+'</div></div></div>'+
       '<div class="actions"><button class="secondary" data-disconnect>Se déconnecter</button><button class="secondary" data-tab="library">Bibliothèque</button></div>'+yt+
       (auth.youtubeConnected?'<div class="headrow"><h2>Mes abonnements</h2><span class="tag">'+auth.subscriptions.length+'</span></div>'+
       (auth.subscriptions.length?'<div class="subscriptions">'+auth.subscriptions.map(x=>'<a href="https://www.youtube.com/channel/'+encodeURIComponent(x.snippet?.resourceId?.channelId||"")+'" target="_blank" rel="noopener noreferrer">'+h(x.snippet?.title||"Chaîne YouTube")+' ↗</a>').join("")+'</div>':'<p class="muted">Aucun abonnement accessible sur ce compte.</p>'):'');
   }else{
-    profile='<div class="connect-hero"><div class="google-emblem">G</div><h2>Connexion Google</h2><p class="muted">JabouTude est ouvert à tous les comptes Google. Choisis simplement ton compte pour accéder à ton profil. L’accès aux données YouTube est facultatif.</p>'+
+    profile='<div class="connect-hero"><div class="google-emblem">G</div><h2>Connexion Google</h2><p class="muted">JabouTube est ouvert à tous les comptes Google. Choisis simplement ton compte pour accéder à ton profil. L’accès aux données YouTube est facultatif.</p>'+
       '<button class="primary" data-login'+(!auth.configured?' disabled':'')+'>'+(auth.loading?"Connexion en cours…":"Continuer avec Google")+'</button>'+
-      (!auth.configured?'<p class="setup-note">La connexion publique attend l’activation Google OAuth par le propriétaire de JabouTude.</p>':'')+
+      (!auth.configured?'<p class="setup-note">La connexion publique attend l’activation Google OAuth par le propriétaire de JabouTube.</p>':'')+
       '</div>';
   }
   $("content").innerHTML='<div class="settings account-area">'+profile+
     (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
-    '<div class="notice"><b>Historique :</b> Google ne fournit pas automatiquement à JabouTude la liste de toutes les vidéos déjà regardées. L’historique local et l’import Google Takeout restent indépendants.</div>'+
+    '<div class="notice"><b>Historique :</b> Google ne fournit pas automatiquement à JabouTube la liste de toutes les vidéos déjà regardées. L’historique local et l’import Google Takeout restent indépendants.</div>'+
     '<div class="actions"><a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Historique YouTube ↗</a><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout ↗</a></div>'+
     (!auth.configured?'<div class="owner-setup"><h2>Activation publique — administrateur</h2><p>Crée un client OAuth Google de type Application Web avec l’origine autorisée <code>https://jaboutude-server.onrender.com</code>.</p><p>Configure l’audience <b>Externe</b> et publie l’application <b>En production</b> pour tous les comptes Google. Renseigne le Client ID dans la variable Render <code>GOOGLE_CLIENT_ID</code>.</p><p>L’accès facultatif <code>youtube.readonly</code> nécessite YouTube Data API v3 et peut demander une vérification Google, une politique de confidentialité et un domaine vérifiable.</p><a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener noreferrer">Google Cloud Console ↗</a></div>':'')+
     '<div class="headrow" style="margin-top:25px"><a href="./privacy.html">Confidentialité</a> <a href="./terms.html">Conditions d’utilisation</a></div>'+
@@ -212,13 +212,13 @@ function renderSettings(){
   $("content").innerHTML=settingsHtml();
   $("testServer").onclick=async()=>{
     status("Vérification du serveur…");
-    try{const info=await request("/health");status(info.ok?"Serveur JabouTude disponible.":"Serveur indisponible.");}
+    try{const info=await request("/health");status(info.ok?"Serveur JabouTube disponible.":"Serveur indisponible.");}
     catch(e){status("Connexion impossible : "+e.message);}
   };
   $("exportData").onclick=()=>{
     const data={version:1,history:state.history,favorites:state.favorites,exportedAt:new Date().toISOString()};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="jaboutude-sauvegarde.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+    const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="jaboutube-sauvegarde.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
   };
   $("importData").onclick=()=>$("importInput").click();
   $("importInput").onchange=async e=>{
@@ -233,7 +233,7 @@ function renderSettings(){
         const id=getVideoIdFromURL(x.titleUrl||"");
         return id?{id,title:(x.title||"Vidéo").replace(/^Watched /i,""),author:(x.subtitles?.[0]?.name||""),thumb:"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg",duration:0}:null;
       }).filter(Boolean);
-      if(!incoming)throw Error("Format non reconnu. Utilise une sauvegarde JabouTude ou le JSON watch-history de Google Takeout.");
+      if(!incoming)throw Error("Format non reconnu. Utilise une sauvegarde JabouTube ou le JSON watch-history de Google Takeout.");
       const normalList=incoming.filter(x=>x&&/^[-\w]{11}$/.test(x.id)).slice(0,2000);
       state.history=[...normalList,...state.history].filter((x,i,a)=>a.findIndex(y=>y.id===x.id)===i).slice(0,2000);
       save(KEYS.history,state.history);

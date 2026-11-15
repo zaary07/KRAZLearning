@@ -4,9 +4,9 @@
 <script>if(location.hostname==="jaboutude-ios.onrender.com")location.replace("https://jaboutude-server.onrender.com/");</script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="JabouTude"><meta name="description" content="Lecteur vidéo et musique personnel pour iOS, avec historique local et favoris.">
-<link rel="manifest" href="./manifest.webmanifest"><link rel="icon" type="image/webp" href="./jaboutude-icon.webp?v=6"><link rel="apple-touch-icon" href="./jaboutude-icon.webp?v=6">
-<title>JabouTude — Vidéo & Musique</title>
+<meta name="apple-mobile-web-app-title" content="JabouTube"><meta name="description" content="JabouTube : vidéos et musique sur iPhone, favoris et historique local.">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="icon" type="image/webp" href="./jaboutube-icon-192.webp?v=7"><link rel="apple-touch-icon" sizes="180x180" href="./jaboutube-apple-touch-icon.png?v=7">
+<title>JabouTube — Vidéo & Musique</title>
 <style>
 :root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,Inter,"Segoe UI",sans-serif;background:#0b0d12;color:#f7f8fa}
 *{box-sizing:border-box}body{margin:0;background:#0b0d12}button,input,select{font:inherit}button{cursor:pointer}a{color:#aebcf9}
@@ -34,7 +34,7 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 .mobilebar{display:none}.status{font-size:12px;color:#a3aebe;min-height:18px}.click{cursor:pointer}
 @media(max-width:750px){.layout{display:block}.sidebar{display:none}main{padding:15px 15px 95px}.top{margin-bottom:19px}.search{height:46px}.search input{font-size:14px;padding:0 11px}.search button{padding:0 13px}.avatar{height:38px;width:38px}.hero{padding:22px 19px;min-height:150px}.heroglyph{display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 10px}.title{font-size:13px}.subtitle{font-size:11px}.thumb{border-radius:11px}.mobilebar{position:fixed;z-index:20;left:0;right:0;bottom:0;padding-bottom:env(safe-area-inset-bottom);display:flex;background:#13161df7;border-top:1px solid #303441;justify-content:space-around}.mobilebar button{background:none;border:0;color:#a0a5b5;padding:10px 5px;min-width:65px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:3px}.mobilebar button.active{color:#ff5c7f}.mobilebar b{font-size:23px}.playerbackdrop{padding:10px}.playertext{flex-direction:column}#videoPlayer{margin-top:15px}}
 
-/* JabouTude v3 — navigation mobile plus compacte */
+/* JabouTube v3 — navigation mobile plus compacte */
 [hidden]{display:none!important}
 .top{align-items:stretch}.search{min-width:0;max-width:700px}.search button{white-space:nowrap;min-width:52px}
 .avatar{flex:0 0 auto;border:0;color:white;overflow:hidden}.avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover}
@@ -86,7 +86,7 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 }
 
 
-/* Official JabouTude dark identity */
+/* Official JabouTube dark identity */
 .brand{padding:0 10px 19px}
 .brand img{display:block;width:195px;height:auto;max-width:100%;object-fit:contain}
 .hero-brand{display:block;width:180px;height:auto;max-height:60px;object-fit:contain;object-position:left center;margin-bottom:9px}
@@ -97,7 +97,7 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <body>
 <div class="layout">
 <aside class="sidebar">
-<div class="brand"><img src="./jaboutude-logo.webp" width="195" height="65" alt="JabouTude" decoding="async"></div>
+<div class="brand"><img src="./jaboutube-logo.webp" width="195" height="65" alt="JabouTube" decoding="async"></div>
 <nav class="nav" id="nav">
 <button data-tab="home" class="active"><span>⌂</span> Accueil</button>
 <button data-tab="music"><span>♫</span> Musique</button>
@@ -113,7 +113,7 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <form id="searchForm" class="search"><input id="searchInput" type="search" placeholder="Rechercher des vidéos, artistes, podcasts…" autocomplete="off" aria-label="Recherche"><button aria-label="Rechercher">⌕ Rechercher</button></form>
 <button class="iconbtn" id="settingsTop" aria-label="Paramètres">⚙</button><button class="avatar account-btn" id="accountBtn" aria-label="Compte Google" title="Compte Google">👤</button>
 </header>
-<section class="hero"><div><img class="hero-brand" src="./jaboutude-logo.webp" width="180" height="60" alt="JabouTude" decoding="async"><div class="eyebrow" id="eyebrow">Ton espace personnel</div><h1 id="heading">Tes vidéos, à ta façon.</h1><p class="muted" id="description">Vidéos et musique dans la même application. Recherche libre, favoris, historique local et lecteur intégré.</p></div><div class="heroglyph">▶♫</div></section>
+<section class="hero"><div><img class="hero-brand" src="./jaboutube-logo.webp" width="180" height="60" alt="JabouTube" decoding="async"><div class="eyebrow" id="eyebrow">Ton espace personnel</div><h1 id="heading">Tes vidéos, à ta façon.</h1><p class="muted" id="description">Vidéos et musique dans la même application. Recherche libre, favoris, historique local et lecteur intégré.</p></div><div class="heroglyph">▶♫</div></section>
 <div class="quick-links" id="quickLinks"><button data-q="Actualités France">Actualités</button><button data-q="Musique 2026">Musique</button><button data-q="Technologie">Tech</button><button data-q="Football highlights">Sport</button></div>
 <section id="content"><div class="empty">Chargement des vidéos…</div></section>
 <div class="status" id="status" role="status"></div>

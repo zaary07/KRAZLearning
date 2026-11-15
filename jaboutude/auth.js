@@ -51,7 +51,7 @@
     state.playlists=requests[0].status==="fulfilled"?requests[0].value.items||[]:[];
     state.subscriptions=requests[1].status==="fulfilled"?requests[1].value.items||[]:[];
     if(requests.some(x=>x.status==="rejected"))
-      state.error="Google est connecté, mais certaines données YouTube ne sont pas accessibles. L’autorisation YouTube peut nécessiter la vérification de JabouTude par Google.";
+      state.error="Google est connecté, mais certaines données YouTube ne sont pas accessibles. L’autorisation YouTube peut nécessiter la vérification de JabouTube par Google.";
     state.loading=false;notify();
   }
   async function acceptLogin(response){
