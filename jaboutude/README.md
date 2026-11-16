@@ -45,3 +45,9 @@ La liaison permet d’afficher les playlists et les abonnements avec le scope `y
 
 ## Écran verrouillé
 Le lecteur vidéo YouTube intégré n’est **pas** un lecteur audio en arrière-plan. JabouTube propose un bouton vers la vidéo officielle YouTube, à la même position temporelle quand elle est connue. L’écoute écran verrouillé dans l’application YouTube dépend de la prise en charge de YouTube Premium et des règles de l’application. Les tentatives antérieures d’extraction audio via Invidious, qui échouaient souvent en HTTP 403, ne sont plus exposées comme solution fiable dans l’interface.
+
+## Session Google et historique YouTube
+
+Depuis la version 2026-11-16, la connexion Google via token client est conservée temporairement dans `sessionStorage`, distincte par membre familial, ce qui évite la déconnexion lors d'un simple rafraîchissement du navigateur. **Ce n'est pas une connexion OAuth permanente :** les jetons expirent généralement après environ une heure et doivent être renouvelés par une action de l’utilisateur. L'application ne stocke ni `refresh_token` ni `client_secret` dans le navigateur. Pour une reconnexion multi-jours, il faudra une architecture serveur avec OAuth code flow, rafraîchissement et stockage sécurisé, soumise à la limite de 7 jours des refresh tokens en mode test Google.
+
+L'API YouTube Data v3 **ne permet pas de lire l'historique YouTube d’un utilisateur** (`watchHistoryNotAccessible`), même avec `youtube.readonly`. Dans l'onglet Historique, un membre peut voir ses lectures JabouTube et importer son export Google Takeout `watch-history.json` après extraction depuis l'archive. Cette copie reste locale à ce membre et cet appareil ; elle n'est pas synchronisée avec YouTube.
