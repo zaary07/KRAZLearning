@@ -65,3 +65,13 @@ La page **Accueil** n’est plus une rangée d’historique + tendances. Elle af
 Chaque recherche charge jusqu’à environ 40 résultats par lot, avec défilement infini (IntersectionObserver) et bouton « Afficher plus » en repli. Les doublons sont filtrés, et les vidéos déjà vues récemment sont moins favorisées. Les recherches officielles utilisent YouTube Data API v3 lorsque le membre est connecté (limite de quota partagée), sinon recherche communautaire via le serveur, susceptible d’erreurs HTTP 403. Pour réduire les requêtes, le fil et ses pages sont mis en cache 20 minutes **par profil familial** dans sessionStorage. Aucun historique complet, adresse Gmail ou jeton Google n’est envoyé aux moteurs tiers ; les requêtes de sujets sont toutefois transmises aux fournisseurs de recherche. Les résultats ne sont pas synchronisés entre appareils.
 
 Les anciennes vidéos regardées **en dehors** de JabouTube ne sont pas accessibles via l’API officielle. Une importation Google Takeout de l’historique, si souhaitée, enrichit immédiatement les préférences. Sans importation, les abonnements du compte Google et les vidéos regardées **dans JabouTube** permettent déjà un flux personnalisé qui s’affine avec l’usage.
+
+## Import ZIP Google Takeout pour chaque membre familial
+
+Dans l'onglet **Compte** (ou Historique / Réglages), le membre peut choisir directement son archive `.zip` Google Takeout, sans extraire manuellement `watch-history.json` et sans ChatGPT. La bibliothèque JSZip locale est distribuée sous licence MIT (voir `vendor/JSZip-LICENSE.txt`). Le navigateur extrait uniquement le fichier d’historique YouTube JSON ou HTML et importe les vidéos dédupliquées dans le stockage local séparé par identifiant de membre (maximum 8 000 vidéos uniques). L’archive n’est envoyée ni au serveur Render ni à d’autres fournisseurs.
+
+**Ce n'est pas une connexion Gmail ni un transfert automatique de l'ancien historique** : Google Takeout impose la demande puis le téléchargement par le titulaire du compte. Une récupération complètement automatique nécessiterait Google Data Portability API et ses prérequis spécifiques (projet Cloud dédié, facturation, habilitation OAuth pour scope restreint, vérification). L'application familiale peut dès à présent apprendre automatiquement des vidéos regardées dans JabouTube et des abonnements connectés, sans ZIP.
+
+## Écran verrouillé
+
+Le bouton dans le lecteur vidéo transfère la vidéo officielle à l'application/site YouTube et conserve si possible la position. Le lecteur YouTube iframe ne devient pas un lecteur audio natif : la lecture écran éteint n'est pas garantie dans JabouTube et dépend des fonctions proposées par l’application YouTube, notamment Premium. L’intégration ZIP n'affecte pas cette limite.
