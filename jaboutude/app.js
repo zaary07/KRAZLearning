@@ -1,5 +1,6 @@
 "use strict";
 const $=id=>document.getElementById(id);
+const API_BASE=location.hostname==="jaboutude-ios.onrender.com"?"https://jaboutude-server.onrender.com":"";
 const INSTANCES=[
   {name:"Piped officiel",url:"https://pipedapi.kavin.rocks"},
   {name:"Piped leptons.xyz",url:"https://pipedapi.leptons.xyz"},
@@ -39,7 +40,7 @@ function renderList(items,empty){
 async function request(path){
   const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),28000);
   try{
-    const response=await fetch('/api'+path,{headers:{accept:"application/json"},signal:ctrl.signal,credentials:"omit",cache:"default"});
+    const response=await fetch(API_BASE+'/api'+path,{headers:{accept:"application/json"},signal:ctrl.signal,credentials:"omit",cache:"default"});
     if(!response.ok){const err=await response.json().catch(()=>({}));throw Error(err.error||"Serveur HTTP "+response.status)}
     return await response.json();
   }finally{clearTimeout(timeout);}
@@ -194,7 +195,7 @@ function showYouTubeVideo(startSeconds=0){
   $("backgroundAudio").disabled=false;
   iframe.style.display="block";
   const url="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(item.id)+
-      "?playsinline=1&rel=0&enablejsapi=1&origin="+encodeURIComponent(location.origin)+
+      "?playsinline=1&rel=0&autoplay=1&enablejsapi=1&origin="+encodeURIComponent(location.origin)+
       (seconds?"&start="+seconds:"");
   iframe.src=url;
   playback.mode="embed";updatePosition(seconds,true);startProgressTracker();
@@ -208,6 +209,11 @@ function showYouTubeVideo(startSeconds=0){
             if(playback.ytInstance!==token)return;
             playback.ytReady=true;
             if(seconds>0)try{event.target.seekTo(seconds,true)}catch{}
+            try{event.target.playVideo()}catch{}
+          },
+          onAutoplayBlocked:()=>{
+            if(playback.ytInstance!==token)return;
+            setPlaybackInfo("Lecture automatique bloquée par le navigateur. Appuie sur ▶ une fois pour autoriser le son.");
           },
           onStateChange:event=>{
             if(playback.ytInstance!==token)return;
@@ -379,7 +385,10 @@ async function tryDirectPlayer({forPip=false}={}){
   try{
     const data=await request("/streams/"+encodeURIComponent(item.id));
     if(sw!==playback.switching||state.playing?.id!==item.id)return false;
-    const streams=(data.videoStreams||[]).filter(x=>!x.videoOnly&&x.url).sort((a,b)=>(b.height||0)-(a.height||0));
+    const streams=(data.videoStreams||[]).filter(x=>!x.videoOnly&&x.url).sort((a,b)=>{
+      const score=x=>(/video\/mp4/i.test(x.format||"")?2000:0)+(x.height<=720?1000:0)+(x.height||0);
+      return score(b)-score(a);
+    });
     const src=streams[0]?.url||data.hls;
     if(!src)throw Error("Pas de flux vidéo natif disponible pour cette vidéo.");
     const native=$("videoPlayer");
@@ -408,19 +417,27 @@ async function tryDirectPlayer({forPip=false}={}){
     if(forPip)setPlaybackInfo("Lecteur natif prêt. Appuie à nouveau sur le bouton PiP pour ouvrir la fenêtre flottante.");
     return true;
   }catch(error){
-    playerMessage(error.message+" Le lecteur YouTube reste disponible.");
+    const video=$("videoPlayer");
+    video.pause();video.removeAttribute("src");video.load();video.style.display="none";
+    playerMessage(error.message+" Le lecteur YouTube reste disponible si cette vidéo autorise l’intégration.");
     return false;
   }finally{btn.disabled=false;btn.textContent="Essayer la lecture vidéo native"}
 }
 async function togglePictureInPicture(){
   const video=$("videoPlayer");
-  // iOS requires direct user activation for PiP; preparing a stream first
-  // then requiring a second click respects this requirement.
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||
+    (navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  const installed=window.matchMedia?.("(display-mode: standalone)").matches||navigator.standalone===true;
+  if(ios&&installed){
+    setPlaybackInfo("iOS limite le Picture-in-Picture dans les Web Apps installées. Ouvre JabouTube dans Safari puis utilise le PiP d’une vidéo native compatible.");
+    return;
+  }
+  // Native media must first be loaded. PiP activation still requires a real user tap.
   if(playback.mode!=="native"||video.readyState<1){await tryDirectPlayer({forPip:true});return;}
   try{
     if(typeof video.webkitSupportsPresentationMode==="function" &&
        !video.webkitSupportsPresentationMode("picture-in-picture")){
-      setPlaybackInfo("PiP indisponible dans cette Web App installée sur iOS. Essaie la même vidéo dans Safari ; Apple limite le PiP des PWA.");
+      setPlaybackInfo("PiP non pris en charge pour ce flux dans ce navigateur. Essaie Safari avec une vidéo native compatible.");
       return;
     }
     if(typeof video.webkitSetPresentationMode==="function"){
@@ -430,7 +447,7 @@ async function togglePictureInPicture(){
     }else{
       setPlaybackInfo("Le Picture-in-Picture n’est pas disponible dans ce navigateur. Essaie Safari.");
     }
-  }catch(error){setPlaybackInfo("PiP refusé par iOS ("+error.name+"). Ouvre JabouTube dans Safari pour essayer.")}
+  }catch(error){setPlaybackInfo("PiP refusé par le navigateur ("+error.name+"). La vidéo native et Safari peuvent offrir des fonctionnalités différentes.")}
 }
 function settingsHtml(){return '<div class="settings">'+
 '<h2>Compte Google</h2><p class="muted">Connecte-toi depuis l’onglet Compte pour accéder aux playlists et abonnements lorsque l’authentification Google sera configurée.</p><button class="primary" data-tab="account">Ouvrir le compte</button>'+
