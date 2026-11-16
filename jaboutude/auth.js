@@ -8,7 +8,7 @@
   const fail=(error)=>{state.loading=false;state.error=String(error?.message||error||"Erreur de connexion Google");notify()};
   async function init(){
     try{
-      const resp=await fetch("/api/config",{credentials:"same-origin",cache:"no-store"});
+      const resp=await fetch((window.JaboutubeApiBase||"")+"/api/config",{credentials:"same-origin",cache:"no-store"});
       if(!resp.ok)throw Error("Configuration inaccessible");
       const d=await resp.json();
       state.clientId=String(d.googleClientId||"");
@@ -66,7 +66,7 @@
     let profile=await googleGet("oauth2/v3/userinfo");
     if(state.familyOnly){
       if(!state.familyReady)throw Error("Accès familial à configurer par le propriétaire.");
-      const verified=await fetch("/api/me",{headers:{Authorization:"Bearer "+state.token,Accept:"application/json"},cache:"no-store"});
+      const verified=await fetch((window.JaboutubeApiBase||"")+"/api/me",{headers:{Authorization:"Bearer "+state.token,Accept:"application/json"},cache:"no-store"});
       const data=await verified.json().catch(()=>({}));
       if(!verified.ok||!data.user?.sub)throw Error(data.error||"Ce compte n’a pas été invité à JabouTube.");
       profile={...profile,...data.user};
@@ -91,7 +91,7 @@
     if(!nextProfileResponse.ok||!prior||prior!==nextProfile.sub)
       throw Error("Choisis le même compte Google pour YouTube et JabouTube.");
     if(state.familyOnly){
-      const access=await fetch("/api/me",{headers:{Authorization:"Bearer "+nextToken},cache:"no-store"});
+      const access=await fetch((window.JaboutubeApiBase||"")+"/api/me",{headers:{Authorization:"Bearer "+nextToken},cache:"no-store"});
       if(!access.ok)throw Error("Compte familial non autorisé.");
     }
     state.token=nextToken;
