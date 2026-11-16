@@ -1,16 +1,31 @@
 "use strict";
 const $=id=>document.getElementById(id);
 const API_BASE=location.hostname==="jaboutude-ios.onrender.com"?"https://jaboutude-server.onrender.com":"";
+window.JaboutubeApiBase=API_BASE;
 const INSTANCES=[
   {name:"Piped officiel",url:"https://pipedapi.kavin.rocks"},
   {name:"Piped leptons.xyz",url:"https://pipedapi.leptons.xyz"},
   {name:"Piped nosebs.ru",url:"https://pipedapi.nosebs.ru"}
 ];
 const KEYS={history:"jaboutube.history.v1",favs:"jaboutube.favs.v1",instance:"jaboutube.instance.v1"};
-const stored=(k,def)=>{try{const current=localStorage.getItem(k);const legacy=k.replace(/^jaboutube\./,"jaboutude.");return JSON.parse(current??localStorage.getItem(legacy))??def}catch{return def}};
-const save=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+let activeMemberKey=null;
+function memberStorageKey(key){return activeMemberKey&&activeMemberKey!=="legacy"?key.replace(/^jaboutube\./,"jaboutube.member."+activeMemberKey+"."):key;}
+const stored=(k,def)=>{try{const current=localStorage.getItem(memberStorageKey(k));const legacy=activeMemberKey&&activeMemberKey!=="legacy"?null:localStorage.getItem(k.replace(/^jaboutube\./,"jaboutude."));return JSON.parse(current??legacy)??def}catch{return def}};
+const save=(k,v)=>localStorage.setItem(memberStorageKey(k),JSON.stringify(v));
 let latestRequest=0;
-const state={tab:"home",query:"",playing:null,items:[],history:stored(KEYS.history,[]),favorites:stored(KEYS.favs,[]),api:stored(KEYS.instance,INSTANCES[0].url),busy:false,music:false};
+const state={tab:"account",query:"",playing:null,items:[],history:[],favorites:[],api:stored(KEYS.instance,INSTANCES[0].url),busy:false,music:false};
+function familyLocked(){const a=window.JabouAuth?.state;return !!(a?.familyOnly&&!a.authorized)}
+function switchFamilyProfile(a){
+ const next=a.familyOnly?(a.authorized&&a.profile?.sub?String(a.profile.sub):null):"legacy";
+ if(next===activeMemberKey)return false;
+ if(state.playing){stopPlayers();state.playing=null;}
+ activeMemberKey=next;state.items=[];
+ state.history=next?stored(KEYS.history,[]):[];
+ state.favorites=next?stored(KEYS.favs,[]):[];
+ playback.positions=next?stored("jaboutube.positions.v1",{}):{};
+ playback.id=null;playback.seconds=0;
+ return true;
+}
 function h(s){const x=document.createElement("span");x.textContent=String(s??"");return x.innerHTML;}
 function idOf(it){const raw=it?.url||it?.videoId||it?.id||"";const m=String(raw).match(/[?&]v=([\w-]{11})|(?:youtu\.be\/|\/)\b([\w-]{11})\b/);return m?.[1]||m?.[2]||(/^[-\w]{11}$/.test(String(raw))?raw:"");}
 function normal(raw){const id=idOf(raw);return id?{id,title:raw.title||"Sans titre",author:raw.uploader||raw.author||"",thumb:raw.thumbnail||raw.thumbnailUrl||"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg",duration:raw.duration||raw.lengthSeconds||0,views:raw.views||0}:null;}
@@ -18,6 +33,7 @@ function time(n){n=Math.max(0,Math.floor(Number(n)||0));return Math.floor(n/3600
 function status(msg){$("status").textContent=msg;}
 function setTitle(eyebrow,title,desc){$("eyebrow").textContent=eyebrow;$("heading").textContent=title;$("description").textContent=desc;}
 function setTab(tab){
+  if(familyLocked()&&tab!=="account")tab="account";
   state.tab=tab;state.music=tab==="music";
   const hero=document.querySelector(".hero");if(hero)hero.classList.toggle("compact",tab!=="home");
   const quick=$("quickLinks");if(quick)quick.hidden=tab!=="home";
@@ -40,7 +56,13 @@ function renderList(items,empty){
 async function request(path){
   const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),28000);
   try{
-    const response=await fetch(API_BASE+'/api'+path,{headers:{accept:"application/json"},signal:ctrl.signal,credentials:"omit",cache:"default"});
+    const headers={accept:"application/json"};
+    if(window.JabouAuth?.state?.familyOnly){
+      const token=window.JabouAuth.getAccessToken();
+      if(!token)throw Error("Connecte-toi avec ton compte familial.");
+      headers.Authorization="Bearer "+token;
+    }
+    const response=await fetch(API_BASE+'/api'+path,{headers,signal:ctrl.signal,credentials:"omit",cache:"default"});
     if(!response.ok){const err=await response.json().catch(()=>({}));throw Error(err.error||"Serveur HTTP "+response.status)}
     return await response.json();
   }finally{clearTimeout(timeout);}
@@ -62,6 +84,7 @@ async function loadTrending(){
   }catch(e){if(seq!==latestRequest)return;fail(e.message);status("Les tendances ne répondent pas.");}
 }
 async function search(term){
+  if(familyLocked()){setTab("account");return;}
   state.query=String(term||"").trim();if(!state.query)return;
   const seq=++latestRequest;
   if(getVideoIdFromURL(state.query)){
@@ -93,6 +116,7 @@ function renderMusic(){
 }
 function favIndex(id){return state.favorites.findIndex(x=>x.id===id)}
 function toggleFav(it){
+  if(familyLocked())return;
   const i=favIndex(it.id);
   if(i>=0)state.favorites.splice(i,1);
   else state.favorites.unshift(it);
@@ -101,6 +125,7 @@ function toggleFav(it){
 }
 function updateFav(){$("favCurrent").textContent=state.playing&&favIndex(state.playing.id)>=0?"♥ Retirer des favoris":"♡ Ajouter aux favoris";}
 function historyAdd(it){
+  if(familyLocked())return;
   state.history=[it,...state.history.filter(x=>x.id!==it.id)].slice(0,600);
   save(KEYS.history,state.history);
 }
@@ -114,7 +139,7 @@ function historyAdd(it){
 const playback={
   id:null,seconds:0,mode:"none",yt:null,ytReady:false,ytInstance:0,
   switching:0,progressTimer:null,lastSaved:0,
-  positions:stored("jaboutube.positions.v1",{}),audioSrc:""
+  positions:{},audioSrc:""
 };
 function setPlaybackInfo(message){const el=$("playbackInfo");if(el)el.textContent=message;}
 function validSeconds(seconds){return Number.isFinite(Number(seconds))&&Number(seconds)>=0?Number(seconds):0}
@@ -286,6 +311,7 @@ function syncPlayerButtons(){
   btn.textContent=playback.mode==="native"?"▣ Passer en Picture-in-Picture":"▣ Activer le Picture-in-Picture";
 }
 async function openVideo(item){
+  if(familyLocked()){setTab("account");return;}
   if(!/^[-\w]{11}$/.test(String(item?.id||""))){status("Identifiant vidéo incorrect");return;}
   if(state.playing)stopPlayers();
   else {stopProgressTracker();clearYouTubeIframe();}
@@ -451,7 +477,7 @@ async function togglePictureInPicture(){
 }
 function settingsHtml(){return '<div class="settings">'+
 '<h2>Compte Google</h2><p class="muted">Connecte-toi depuis l’onglet Compte pour accéder aux playlists et abonnements lorsque l’authentification Google sera configurée.</p><button class="primary" data-tab="account">Ouvrir le compte</button>'+
-'<h2 style="margin-top:24px">Historique local</h2><p class="muted">'+state.history.length+' vidéos consultées · '+state.favorites.length+' favoris</p>'+
+'<h2 style="margin-top:24px">Historique personnel</h2><p class="muted">'+state.history.length+' vidéos consultées · '+state.favorites.length+' favoris</p>'+
 '<div class="actions"><button class="secondary" id="exportData">Exporter</button><button class="secondary" id="importData">Importer un JSON</button><input type="file" id="importInput" accept=".json,application/json" hidden><button class="secondary" id="clearHistory">Effacer l’historique</button></div>'+
 '<div class="notice"><b>Importer ton historique YouTube :</b> exporte « YouTube et YouTube Music » au format JSON dans <a href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout</a>, puis importe watch-history.json ici. Cela reste une copie locale, pas une synchronisation permanente.</div>'+
 '<h2 style="margin-top:24px">Diagnostic</h2><button class="secondary" id="testServer">Tester la connexion vidéo</button>'+
@@ -483,16 +509,18 @@ function renderAccount(){
       (auth.youtubeConnected?'<div class="headrow"><h2>Mes abonnements</h2><span class="tag">'+auth.subscriptions.length+'</span></div>'+
       (auth.subscriptions.length?'<div class="subscriptions">'+auth.subscriptions.map(x=>'<a href="https://www.youtube.com/channel/'+encodeURIComponent(x.snippet?.resourceId?.channelId||"")+'" target="_blank" rel="noopener noreferrer">'+h(x.snippet?.title||"Chaîne YouTube")+' ↗</a>').join("")+'</div>':'<p class="muted">Aucun abonnement accessible sur ce compte.</p>'):'');
   }else{
-    profile='<div class="connect-hero"><div class="google-emblem">G</div><h2>Connexion Google</h2><p class="muted">JabouTube est ouvert à tous les comptes Google. Choisis simplement ton compte pour accéder à ton profil. L’accès aux données YouTube est facultatif.</p>'+
+    profile='<div class="connect-hero"><div class="google-emblem">G</div><h2>Connexion Google</h2><p class="muted">JabouTube est conçu pour un usage familial. Chacun utilise son propre compte Google ; après activation, seules les adresses invitées peuvent accéder à l’application.</p>'+
       '<button class="primary" data-login'+(!auth.configured?' disabled':'')+'>'+(auth.loading?"Connexion en cours…":"Continuer avec Google")+'</button>'+
       (!auth.configured?'<p class="setup-note">La connexion publique attend l’activation Google OAuth par le propriétaire de JabouTube.</p>':'')+
       '</div>';
   }
-  $("content").innerHTML='<div class="settings account-area">'+profile+
+  $("content").innerHTML='<div class="settings account-area">'+
+    (!auth.familyOnly?'<div class="notice"><b>Accès familial non activé :</b> le propriétaire doit ajouter les adresses autorisées sur Render. Le site n’est pas encore privé.</div>':'')+
+    (auth.familyOnly&&auth.authorized?'<div class="notice"><b>Profil personnel :</b> l’historique et les favoris sont séparés par compte sur cet appareil. Les données locales ne sont pas chiffrées et ne sont pas synchronisées entre appareils.</div>':'')+profile+
     (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
     '<div class="notice"><b>Historique :</b> Google ne fournit pas automatiquement à JabouTube la liste de toutes les vidéos déjà regardées. L’historique local et l’import Google Takeout restent indépendants.</div>'+
     '<div class="actions"><a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Historique YouTube ↗</a><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout ↗</a></div>'+
-    (!auth.configured?'<div class="owner-setup"><h2>Activation publique — administrateur</h2><p>Crée un client OAuth Google de type Application Web avec l’origine autorisée <code>https://jaboutude-server.onrender.com</code>.</p><p>Configure l’audience <b>Externe</b> et publie l’application <b>En production</b> pour tous les comptes Google. Renseigne le Client ID dans la variable Render <code>GOOGLE_CLIENT_ID</code>.</p><p>L’accès facultatif <code>youtube.readonly</code> nécessite YouTube Data API v3 et peut demander une vérification Google, une politique de confidentialité et un domaine vérifiable.</p><a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener noreferrer">Google Cloud Console ↗</a></div>':'')+
+    (!auth.configured?'<div class="owner-setup"><h2>Activation familiale — administrateur</h2><p>Crée un client OAuth Google de type Application Web avec l’origine autorisée <code>https://jaboutude-server.onrender.com</code>.</p><p>Configure l’audience <b>Externe</b> et ajoute les comptes familiaux aux utilisateurs de test ou à l’audience autorisée. Renseigne <code>GOOGLE_CLIENT_ID</code> puis la liste des adresses familiales séparées par des virgules dans <code>JABOUTUBE_ALLOWED_EMAILS</code> sur Render.</p><p>L’accès facultatif <code>youtube.readonly</code> nécessite YouTube Data API v3 et peut demander une vérification Google, une politique de confidentialité et un domaine vérifiable.</p><a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener noreferrer">Google Cloud Console ↗</a></div>':'')+
     '<div class="headrow" style="margin-top:25px"><a href="./privacy.html">Confidentialité</a> <a href="./terms.html">Conditions d’utilisation</a></div>'+
   '</div>';
 }
@@ -612,9 +640,14 @@ $("openOriginal").onclick=()=>{if(state.playing)window.open("https://www.youtube
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("playerOverlay").classList.contains("open")){$("closePlayer").click()}});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 window.JabouAuth?.subscribe(a=>{
+  const changed=switchFamilyProfile(a);
   refreshAvatar();
+  if(a.familyOnly&&(!a.authorized||changed)){setTab(a.authorized?"home":"account");return;}
   if(state.tab==="account")renderAccount();
   if(state.tab==="library")renderLibrary();
 });
-window.JabouAuth?.init();
-setTab("home");
+setTab("account");
+window.JabouAuth?.init().then(()=>{
+  if(!window.JabouAuth?.state.familyOnly)setTab("home");
+  else if(!window.JabouAuth?.state.authorized)setTab("account");
+}).catch(()=>setTab("account"));
