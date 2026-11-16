@@ -677,13 +677,14 @@ function renderInviteAccount(auth){
      '<p class="muted">Associe ton compte Google pour consulter tes playlists et abonnements personnels. Cette connexion ne remplace pas ton espace familial.</p>'+
      '<button class="primary" data-connect-youtube '+(!auth.configured||auth.loading?'disabled':'')+'>Connecter Google / YouTube</button>'+
      (!auth.configured?'<p class="setup-note">Connexion temporairement indisponible : le propriétaire doit encore activer Google OAuth et YouTube Data API v3. La clé familiale ne résout pas cette configuration.</p>':'');
+  const googleJob=p?window.JabouPortability?.readJob?.(p.sub):null;
   const historySetup=p?
     '<div class="takeout-setup"><h2>Personnaliser mon accueil YouTube</h2>'+
     '<p>JabouTube apprend automatiquement tes goûts avec tes abonnements et tes vidéos regardées ici.</p>'+
     '<p>Pour récupérer tes anciennes préférences YouTube, demande une seule fois ton historique dans Google Takeout, puis sélectionne directement son ZIP ici. Aucun JSON à extraire, aucun passage par ChatGPT.</p>'+
-    '<div class="actions"><button class="primary" type="button" data-google-history>Récupérer mon historique depuis Google</button></div>'+
+    '<div class="actions"><button class="primary" type="button" data-google-history>'+(googleJob?'Vérifier la préparation de mon historique':'Récupérer mon historique depuis Google')+'</button></div>'+
     '<p class="muted">Google doit autoriser ce transfert. La préparation peut prendre plusieurs heures. Sélectionne ton propre compte Google lors de l’autorisation.</p>'+
-    '<div class="notice" id="portabilityStatus" role="status" aria-live="polite">La récupération automatique utilise Google Data Portability. Tant que l’application est en mode test, seuls les comptes test autorisés par Google peuvent l’utiliser.</div>'+
+    '<div class="notice" id="portabilityStatus" role="status" aria-live="polite">'+(googleJob?'Une demande de transfert Google est déjà enregistrée pour ce membre. Vérifie si l’archive est prête.':'La récupération automatique utilise Google Data Portability. Tant que l’application est en mode test, seuls les comptes test autorisés par Google peuvent l’utiliser.')+'</div>'+
     '<div class="actions"><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Exporter mon ZIP Google</a>'+
     '<button class="secondary" type="button" data-import-history>Importer un ZIP (autre solution)</button></div>'+
     '<p class="muted">'+state.history.length+' vidéos enregistrées sur cet appareil. Google ou JabouTube peuvent nécessiter une validation supplémentaire pour le transfert automatique.</p></div>':'';
