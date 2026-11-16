@@ -1,4 +1,4 @@
-const CACHE="jaboutube-shell-v20";
+const CACHE="jaboutube-shell-v21";
 const ASSETS=["./","./index.html","./app.js","./auth.js","./recommendations.js","./import.js","./portability.js","./vendor/jszip.min.js","./admin.html","./android-audio.html","./ios-audio.html","./privacy.html","./terms.html","./manifest.webmanifest","./icon.svg","./jaboutube-icon-192.webp","./jaboutube-icon-512.webp","./jaboutube-apple-touch-icon.png","./jaboutube-logo.webp"];
 self.addEventListener("install",event=>event.waitUntil(
  caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())
