@@ -12,7 +12,9 @@ const HOSTS = [
   'https://inv.nadeko.net'
 ];
 const cache = new Map();
-const json = (res,status,payload)=>{const b=JSON.stringify(payload);res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(b);};
+const inFlight = new Map();
+const hostCooldown = new Map();
+const json = (res,status,payload)=>{const b=JSON.stringify(payload);res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','access-control-allow-origin':'*'});res.end(b);};
 const safeId = v => /^[a-zA-Z0-9_-]{11}$/.test(v);
 const norm = v => {
  const id=String(v.videoId||'');
@@ -22,28 +24,39 @@ const norm = v => {
  return {url:'/watch?v='+id,videoId:id,title:v.title||'Sans titre',uploader:v.author||'',author:v.author||'',thumbnail:preferred.url||'https://i.ytimg.com/vi/'+id+'/hqdefault.jpg',duration:Number(v.lengthSeconds||0),views:Number(v.viewCount||0)};
 };
 async function upstream(endpoint,allow){
- const result=await Promise.any(HOSTS.map(async host=>{
+ // Failed public instances should not delay every request for many seconds.
+ const hosts=HOSTS.filter(host=>(hostCooldown.get(host)||0)<Date.now());
+ if(!hosts.length)throw Error('Fournisseurs vidéo externes momentanément bloqués (HTTP 403).');
+ try{
+  return await Promise.any(hosts.map(async host=>{
    const controller=new AbortController();
-   const timeout=setTimeout(()=>controller.abort(),8500);
+   const timeout=setTimeout(()=>controller.abort(),5500);
    try{
-     const resp=await fetch(host+endpoint,{headers:{accept:'application/json','user-agent':'JabouTube/2.0 personal browser'},signal:controller.signal});
-     if(!resp.ok)throw Error(host+' HTTP '+resp.status);
-     const body=await resp.text();
-     if(body.length>5_000_000)throw Error('upstream response too large');
-     const v=JSON.parse(body);
-     if(!allow(v))throw Error(host+' empty or invalid response');
-     return {value:v,host};
+    const resp=await fetch(host+endpoint,{headers:{accept:'application/json','user-agent':'JabouTube/2.0 personal browser'},signal:controller.signal});
+    if(resp.status===403||resp.status===429)hostCooldown.set(host,Date.now()+90000);
+    if(!resp.ok)throw Error(host+' HTTP '+resp.status);
+    const body=await resp.text();
+    if(body.length>5_000_000)throw Error('upstream response too large');
+    const v=JSON.parse(body);
+    if(!allow(v))throw Error(host+' empty or invalid response');
+    return {value:v,host};
    }finally{clearTimeout(timeout);}
- }));
- return result;
+  }));
+ }catch{
+  throw Error('Aucun fournisseur vidéo externe ne répond. Les vidéos publiques restent lisibles via le lecteur YouTube officiel lorsqu’elles autorisent l’intégration.');
+ }
 }
 async function getCached(key,ttl,fn){
  const saved=cache.get(key);
  if(saved&&Date.now()<saved.expires)return saved.value;
- const value=await fn();
- cache.set(key,{value,expires:Date.now()+ttl});
- if(cache.size>70){for(const [k,v] of cache){if(Date.now()>v.expires)cache.delete(k);}}
- return value;
+ if(inFlight.has(key))return inFlight.get(key);
+ const job=Promise.resolve().then(fn).then(value=>{
+  cache.set(key,{value,expires:Date.now()+ttl});
+  if(cache.size>70){for(const [k,v] of cache){if(Date.now()>v.expires)cache.delete(k);}}
+  return value;
+ }).finally(()=>inFlight.delete(key));
+ inFlight.set(key,job);
+ return job;
 }
 function fromUpstream(v,host){
  const title=v.title||'Sans titre', author=v.author||'';
@@ -102,7 +115,7 @@ http.createServer(async(req,res)=>{
   if(u.pathname.startsWith('/api/streams/')){
    const id=u.pathname.slice('/api/streams/'.length);
    if(!safeId(id))return json(res,400,{error:'Identifiant de vidéo invalide.'});
-   const item=await getCached('video:'+id,60000,async()=>{
+   const item=await getCached('video:'+id,180000,async()=>{
      const r=await upstream('/api/v1/videos/'+id+'?local=true',x=>x&&typeof x==='object'&&x.videoId===id);
      return fromUpstream(r.value,r.host);
    });
@@ -117,6 +130,6 @@ http.createServer(async(req,res)=>{
    res.writeHead(200,headers);res.end(data);
   });
  }catch(e){console.error('Request failed',req.url,e);
-   return json(res,503,{error:'Les serveurs vidéo publics sont momentanément indisponibles. Réessaie ou utilise le lecteur YouTube officiel.',message:String(e?.errors?.[0]?.message||e?.message||e)});
+   return json(res,503,{error:String(e?.message||'Fournisseurs externes indisponibles. Essaie une vidéo publique sur YouTube.'),message:String(e?.message||'Serveur externe indisponible')});
  }
 }).listen(PORT,'0.0.0.0',()=>console.log('JabouTube running on port '+PORT));
