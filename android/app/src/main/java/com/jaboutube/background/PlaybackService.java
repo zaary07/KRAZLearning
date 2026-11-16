@@ -1,7 +1,6 @@
 package com.jaboutube.background;
 
 import android.content.Intent;
-import androidx.annotation.Nullable;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
@@ -42,7 +41,6 @@ public final class PlaybackService extends MediaSessionService {
         }
         return super.onStartCommand(intent, flags, startId);
     }
-    @Nullable
     @Override
     public MediaSession onGetSession(MediaSession.ControllerInfo controllerInfo) {
         return session;
