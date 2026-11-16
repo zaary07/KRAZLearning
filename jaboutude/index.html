@@ -92,6 +92,39 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 .hero-brand{display:block;width:180px;height:auto;max-height:60px;object-fit:contain;object-position:left center;margin-bottom:9px}
 .hero.compact .hero-brand{width:132px;max-height:44px;margin-bottom:5px}
 @media(max-width:750px){.hero-brand{width:150px;max-height:50px}.hero.compact .hero-brand{display:none}}
+
+/* iOS standalone: safe areas, bottom reachability and background audio bar */
+.searchShade[hidden],.miniPlayer[hidden]{display:none!important}
+.searchShade{position:fixed;inset:0;z-index:90;background:#050710dd;backdrop-filter:blur(8px);display:flex;justify-content:center;align-items:flex-start;padding:max(116px,18vh) 16px 20px}
+.searchPanel{width:min(100%,560px);background:#191e28;border:1px solid #4a5364;box-shadow:0 28px 85px #000b;border-radius:20px;padding:18px}
+.searchPanelHeader{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;font-size:17px}
+.searchPanelHeader button{border:0;color:white;background:#303847;font-size:17px;padding:7px 12px;border-radius:12px}
+#mobileSearchForm{display:flex;gap:8px;align-items:stretch}
+#mobileSearchForm input{flex:1;min-width:0;padding:13px 11px;border-radius:12px;border:1px solid #495669;background:#0f141e;color:white;font-size:16px;outline-color:#ff6685}
+#mobileSearchForm button{padding:10px 13px;white-space:nowrap;font-size:13px}
+.miniPlayer{position:fixed;z-index:85;left:12px;right:12px;bottom:calc(58px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:9px;background:#1d2735;border:1px solid #4d5970;box-shadow:0 9px 35px #000b;padding:9px 11px;border-radius:15px}
+.miniDetails{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.miniDetails strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.miniDetails small{font-size:11px;color:#aebbd0}
+.miniPlayer button{border:0;border-radius:11px;color:white;background:#343d52;min-width:38px;height:39px}
+.miniPlayer #miniToggle{background:#ff426d;font-size:20px}
+@media(max-width:750px){
+  .mobilebar{min-height:58px}
+  .mobilebar button{min-height:51px}
+  .top .search{max-width:none}
+  #topBar{position:relative;z-index:10;scroll-margin-top:20px}
+}
+@media all and (display-mode:standalone){
+  main{padding-top:calc(12px + env(safe-area-inset-top,0px))}
+  #topBar{margin-top:0}
+  .sidebar{padding-top:calc(25px + env(safe-area-inset-top,0px))}
+  .searchShade{padding-top:max(calc(92px + env(safe-area-inset-top,0px)),22vh)}
+}
+@supports(-webkit-touch-callout:none){
+  input[type=search]{-webkit-appearance:none;appearance:none}
+  .searchPanel{max-height:75dvh;overflow:auto}
+}
+
 </style>
 </head>
 <body>
@@ -109,7 +142,7 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <div class="sidebarfoot">PWA indépendante pour iOS.<br>Sans compte obligatoire.<br>Historique conservé localement.</div>
 </aside>
 <main>
-<header class="top">
+<header class="top" id="topBar">
 <form id="searchForm" class="search"><input id="searchInput" type="search" placeholder="Rechercher des vidéos, artistes, podcasts…" autocomplete="off" aria-label="Recherche"><button aria-label="Rechercher">⌕ Rechercher</button></form>
 <button class="iconbtn" id="settingsTop" aria-label="Paramètres">⚙</button><button class="avatar account-btn" id="accountBtn" aria-label="Compte Google" title="Compte Google">👤</button>
 </header>
@@ -119,16 +152,27 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <div class="status" id="status" role="status"></div>
 </main>
 </div>
-<nav class="mobilebar" id="mobilebar"><button data-tab="home" class="active"><b>⌂</b>Accueil</button><button data-tab="music"><b>♫</b>Musique</button><button data-tab="library"><b>▦</b>Bibliothèque</button><button data-tab="history"><b>◷</b>Historique</button><button data-tab="account"><b>◉</b>Compte</button></nav>
+<nav class="mobilebar" id="mobilebar" aria-label="Navigation mobile"><button data-tab="home" class="active"><b>⌂</b>Accueil</button><button id="mobileSearchBtn" type="button" aria-label="Ouvrir la recherche"><b>⌕</b>Recherche</button><button data-tab="music"><b>♫</b>Musique</button><button data-tab="library"><b>▦</b>Bibliothèque</button><button data-tab="account"><b>◉</b>Compte</button></nav>
+<div class="searchShade" id="searchShade" hidden>
+ <div class="searchPanel" role="dialog" aria-modal="true" aria-label="Recherche JabouTube">
+ <div class="searchPanelHeader"><strong>Rechercher sur JabouTube</strong><button type="button" id="closeSearch" aria-label="Fermer la recherche">✕</button></div>
+ <form id="mobileSearchForm"><input id="mobileSearchInput" type="search" enterkeyhint="search" autocomplete="off" placeholder="Vidéo, musique, artiste…" aria-label="Rechercher une vidéo ou une musique"><button type="submit" class="primary">Rechercher</button></form>
+ <p class="muted" style="font-size:12px;margin:12px 3px 0">Appuie sur Rechercher dans le clavier pour lancer la recherche.</p></div>
+</div>
+<div class="miniPlayer" id="miniPlayer" hidden aria-label="Lecteur audio en cours">
+ <div class="miniDetails"><strong id="miniTitle">Lecture audio</strong><small id="miniSubtitle">Mode arrière-plan</small></div>
+ <button id="miniToggle" aria-label="Lire ou mettre en pause">▶</button><button id="miniOpen" aria-label="Ouvrir le lecteur">↑</button><button id="miniStop" aria-label="Arrêter">✕</button>
+</div>
 <div class="playerbackdrop" id="playerOverlay" role="dialog" aria-label="Lecteur vidéo">
 <div class="playerpanel">
-<div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><button class="secondary" id="closePlayer">✕ Fermer</button></div>
+<div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><button class="secondary" id="closePlayer">↓ Réduire</button></div>
 <video id="videoPlayer" controls playsinline preload="metadata" style="display:none"></video>
 <iframe id="fallbackEmbed" title="Lecteur YouTube de secours" style="display:none;width:100%;aspect-ratio:16/9;border:0;border-radius:14px;margin:12px 0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-<audio id="audioPlayer" controls preload="metadata" style="display:none"></audio>
+<audio id="audioPlayer" controls playsinline preload="metadata" style="display:none"></audio>
+<div class="actions" style="margin:12px 0"><button class="primary" id="backgroundAudio" type="button">♫ Écouter en arrière-plan / écran verrouillé</button></div>
 <div id="playerError" class="notice" style="display:none"></div>
 <div class="playertext"><div><h2 id="watchTitle">Chargement…</h2><p class="muted" id="watchAuthor"></p></div><div class="actions"><button class="secondary" id="favCurrent">♡ Favoris</button><button class="secondary" id="shareCurrent">↗ Partager</button></div></div>
-<p class="playerhelp">Lecture depuis des instances communautaires Invidious. Certains flux sont indisponibles ou bloqués par les instances. Le lecteur YouTube de secours peut afficher des publicités. Il n'y a pas de synchronisation de l'historique Google.</p>
+<p class="playerhelp">Le mode audio natif peut continuer en arrière-plan et sur écran verrouillé si Safari autorise le flux. Les vidéos YouTube intégrées peuvent se mettre en pause quand iOS verrouille l’écran. L’audio de secours dépend des serveurs communautaires et n’est pas garanti pour toutes les vidéos.</p>
 <div class="actions"><button class="secondary" id="directPlayer">Essayer la lecture directe</button></div>
 <button class="secondary" id="openOriginal">Ouvrir la vidéo sur YouTube ↗</button>
 </div></div>
