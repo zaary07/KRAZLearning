@@ -611,12 +611,12 @@ function renderSettings(){
       const records=new Map();
       const convert=entry=>{
         const id=String(entry.id||getVideoIdFromURL(entry.titleUrl||""));
-        if(!/^[-\\w]{11}$/.test(id))return null;
-        const title=String(entry.title||"Vidéo YouTube").replace(/^(Watched |Vous avez regardé\\s+)/i,"").trim().slice(0,300);
+        if(!/^[-\w]{11}$/.test(id))return null;
+        const title=String(entry.title||"Vidéo YouTube").replace(/^(Watched |Vous avez regardé\s+)/i,"").trim().slice(0,300);
         const author=String(entry.author||entry.subtitles?.[0]?.name||"").slice(0,140);
         const date=String(entry.watchedAt||entry.time||"");
         return {id,title,author,thumb:"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg",
-          duration:Number(entry.duration)||0,watchedAt:/^\\d{4}-\\d{2}-\\d{2}T/.test(date)?date:"",
+          duration:Number(entry.duration)||0,watchedAt:/^\d{4}-\d{2}-\d{2}T/.test(date)?date:"",
           watchCount:Math.max(1,Number(entry.watchCount)||1)};
       };
       // The latest view of each video is kept, without dropping newer JabouTube views.
@@ -630,7 +630,7 @@ function renderSettings(){
       if(!next.length)throw Error("Aucune vidéo YouTube valide dans le fichier.");
       save(KEYS.history,next); // Write first: keep prior state if storage quota fails.
       state.history=next;
-      if(Array.isArray(json?.favorites)){state.favorites=json.favorites.filter(x=>x&&/^[-\\w]{11}$/.test(x.id)).slice(0,2000);save(KEYS.favs,state.favorites);}
+      if(Array.isArray(json?.favorites)){state.favorites=json.favorites.filter(x=>x&&/^[-\w]{11}$/.test(x.id)).slice(0,2000);save(KEYS.favs,state.favorites);}
       historyPageSize=80;
       setTab("history");
       status(next.length+" vidéos uniques dans ton historique personnel (maximum "+HISTORY_LIMIT+").");
