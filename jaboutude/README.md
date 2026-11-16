@@ -30,3 +30,18 @@ Si `JABOUTUBE_INVITE_SECRET` est défini mais la configuration est incomplète, 
 - Les sources YouTube qui ont été retirées ou restreignent l'intégration restent indisponibles.
 
 Démarrage local : `node jaboutude/server.mjs` (Render fournit `PORT`).
+
+## Connexion Google / YouTube
+La liaison est facultative en mode invitation familiale et n’a pas besoin de la liste des adresses Gmail des proches. Elle **ne fonctionne pas sans configuration Google Cloud**.
+
+1. Créer un projet Google Cloud et activer **YouTube Data API v3**.
+2. Dans Google Auth Platform / Clients, créer un identifiant OAuth 2.0 de type **Application Web**.
+3. Ajouter les origines JavaScript autorisées :
+   - `https://jaboutude-server.onrender.com`
+   - `https://jaboutude-ios.onrender.com`
+4. Configurer les paramètres de consentement OAuth nécessaires (utilisateurs autorisés / éventuelle vérification Google), puis inscrire **uniquement le Client ID** dans `GOOGLE_CLIENT_ID` sur le service Render.
+
+La liaison permet d’afficher les playlists et les abonnements avec le scope `youtube.readonly`, mais ne donne pas accès à l’historique complet de visionnage ni aux avantages Premium dans le lecteur intégré. Les autorisations Google ne sont pas conservées entre sessions prolongées : l’utilisateur peut devoir se reconnecter.
+
+## Écran verrouillé
+Le lecteur vidéo YouTube intégré n’est **pas** un lecteur audio en arrière-plan. JabouTube propose un bouton vers la vidéo officielle YouTube, à la même position temporelle quand elle est connue. L’écoute écran verrouillé dans l’application YouTube dépend de la prise en charge de YouTube Premium et des règles de l’application. Les tentatives antérieures d’extraction audio via Invidious, qui échouaient souvent en HTTP 403, ne sont plus exposées comme solution fiable dans l’interface.
