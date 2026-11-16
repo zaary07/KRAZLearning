@@ -45,7 +45,7 @@ async function request(path){
   }finally{clearTimeout(timeout);}
 }
 function fail(msg){
-  $("content").innerHTML='<div class="empty"><b>Impossible de récupérer les vidéos.</b><p>'+h(msg)+'</p><p>Les instances gratuites peuvent être indisponibles. Change de serveur dans les paramètres ou réessaie.</p><button id="retry" class="primary">Réessayer</button></div>';
+  $("content").innerHTML='<div class="empty"><b>Impossible de récupérer les vidéos.</b><p>'+h(msg)+'</p><p>Les fournisseurs de recherche externes peuvent être bloqués (HTTP 403). Réessaie, ou colle directement le lien d’une vidéo YouTube publique dans la recherche.</p><button id="retry" class="primary">Réessayer</button></div>';
   $("retry").onclick=()=>state.query?search(state.query):loadTrending();
 }
 async function loadTrending(){
@@ -190,6 +190,8 @@ function showYouTubeVideo(startSeconds=0){
   clearYouTubeIframe();
   const iframe=$("fallbackEmbed"),seconds=Math.max(0,Math.floor(validSeconds(startSeconds)));
   const token=playback.ytInstance;
+  $("playerError").style.display="none";
+  $("backgroundAudio").disabled=false;
   iframe.style.display="block";
   const url="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(item.id)+
       "?playsinline=1&rel=0&enablejsapi=1&origin="+encodeURIComponent(location.origin)+
@@ -210,6 +212,23 @@ function showYouTubeVideo(startSeconds=0){
           onStateChange:event=>{
             if(playback.ytInstance!==token)return;
             try{updatePosition(event.target.getCurrentTime())}catch{}
+          },
+          onError:event=>{
+            if(playback.ytInstance!==token||state.playing?.id!==item.id)return;
+            const code=Number(event.data);
+            const unavailable=code===100;
+            const embedBlocked=code===101||code===150;
+            if(unavailable||embedBlocked){
+              playerMessage(unavailable
+                ?"Cette vidéo n’est plus disponible sur YouTube (supprimée, privée ou restreinte). Choisis une autre vidéo publique."
+                :"Cette vidéo ne permet pas la lecture intégrée. Essaie son lien YouTube officiel si elle est accessible.");
+              $("backgroundAudio").disabled=true;
+            }else if(code===153){
+              playerMessage("YouTube a refusé le lecteur intégré. Ouvre la vidéo sur YouTube ou essaie une autre vidéo publique.");
+            }else{
+              playerMessage("Lecture YouTube impossible (code "+code+"). Essaie une autre vidéo publique.");
+            }
+            setPlaybackInfo("Une erreur YouTube ne dépend pas du système Android ou iOS. Les vidéos retirées pour droits d’auteur restent indisponibles.");
           }
         }
       });
