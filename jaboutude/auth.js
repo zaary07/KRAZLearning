@@ -1,6 +1,48 @@
 "use strict";
 (function(){
-  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false,familyOnly:true,familyReady:false,authorized:false};
+  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false,familyOnly:true,familyReady:false,authorized:false,inviteOnly:false,familySession:null};
+
+  const FAMILY_SESSION_KEY="jaboutube.family.session.v1";
+  const apiBase=()=>window.JaboutubeApiBase||"";
+  async function inviteApi(path,options={}){
+    const response=await fetch(apiBase()+"/api"+path,{cache:"no-store",...options});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(data.error||"Session familiale indisponible.");
+    return data;
+  }
+  async function restoreInviteSession(){
+    state.loading=true;state.authorized=false;state.profile=null;state.familySession=null;notify();
+    try{
+      const params=new URLSearchParams(location.hash.replace(/^#/,""));
+      const invite=params.get("invite");
+      if(invite){
+        // Remove the invitation token from the visible URL before sending it.
+        history.replaceState(null,"",location.pathname+location.search);
+        const result=await inviteApi("/family/claim",{
+          method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({invite})
+        });
+        state.familySession=result.session;
+        localStorage.setItem(FAMILY_SESSION_KEY,JSON.stringify({session:result.session,profile:result.profile}));
+      }else{
+        try{
+          const saved=JSON.parse(localStorage.getItem(FAMILY_SESSION_KEY)||"null");
+          state.familySession=String(saved?.session||"")||null;
+        }catch{localStorage.removeItem(FAMILY_SESSION_KEY)}
+      }
+      if(state.familySession){
+        const who=await inviteApi("/me",{headers:{authorization:"Bearer "+state.familySession}});
+        state.profile=who.user;
+        state.authorized=true;state.error="";
+      }else{
+        state.error="Pour rejoindre JabouTube, ouvre le lien personnel envoyé par le propriétaire de la famille.";
+      }
+    }catch(error){
+      localStorage.removeItem(FAMILY_SESSION_KEY);
+      state.familySession=null;state.profile=null;state.authorized=false;
+      state.error=String(error?.message||error);
+    }finally{state.loading=false;notify()}
+  }
+
   const listeners=new Set();
   let loginClient=null,youtubeClient=null,scriptPromise=null;
   const notify=()=>listeners.forEach(fn=>{try{fn({...state})}catch(e){console.warn("Auth UI",e)}});
@@ -15,7 +57,9 @@
       state.configured=!!d.googleConfigured;
       state.familyOnly=!!d.familyOnly;
       state.familyReady=!!d.familyReady;
+      state.inviteOnly=!!d.inviteOnly;
       notify();
+      if(state.inviteOnly){await restoreInviteSession();return;}
     }catch(error){fail(error)}
   }
   function loadGoogle(){
@@ -100,6 +144,7 @@
     await fetchCollections();
   }
   async function connect(){
+    if(state.inviteOnly)throw Error("Ouvre ton lien personnel JabouTube pour te connecter automatiquement.");
     if(!state.configured)throw Error("La connexion Google publique attend l’activation de l’application par son propriétaire.");
     state.error="";state.loading=true;notify();
     try{
@@ -116,6 +161,7 @@
     }catch(error){fail(error);throw error}
   }
   async function connectYoutube(){
+    if(state.inviteOnly)throw Error("La synchronisation YouTube via Google n’est pas activée en mode invitation.");
     if(!state.profile)throw Error("Connecte d’abord ton compte Google.");
     state.error="";state.loading=true;notify();
     try{
@@ -132,8 +178,10 @@
     }catch(error){fail(error);throw error}
   }
   function disconnect(){
-    // Do not persist or reveal Google tokens; disconnect from this page only.
-    state.token=null;state.profile=null;state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;state.authorized=false;state.expiresAt=0;state.loading=false;state.error="";
+    if(state.inviteOnly)localStorage.removeItem(FAMILY_SESSION_KEY);
+    state.familySession=null;
+    state.token=null;state.profile=null;state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;state.authorized=false;state.expiresAt=0;state.loading=false;
+    state.error=state.inviteOnly?"Ouvre à nouveau une invitation familiale valide pour rejoindre JabouTube.":"";
     notify();
   }
   async function playlistItems(playlistId){
@@ -147,6 +195,9 @@
       return {id,title:x.snippet?.title||"Vidéo YouTube",author:x.snippet?.videoOwnerChannelTitle||"",thumb:th.medium?.url||th.default?.url||"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg",duration:0};
     }).filter(Boolean);
   }
-  function getAccessToken(){return state.authorized&&state.token&&Date.now()<state.expiresAt-12000?state.token:null}
+  function getAccessToken(){
+    if(state.inviteOnly)return state.authorized?state.familySession:null;
+    return state.authorized&&state.token&&Date.now()<state.expiresAt-12000?state.token:null;
+  }
   window.JabouAuth={state,subscribe,init,connect,connectYoutube,disconnect,playlistItems,getAccessToken};
 })();
