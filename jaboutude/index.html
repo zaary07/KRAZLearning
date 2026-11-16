@@ -174,17 +174,17 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <video id="videoPlayer" controls playsinline webkit-playsinline preload="metadata" style="display:none" aria-label="Vidéo avec lecture Picture-in-Picture lorsque prise en charge"></video>
 <iframe id="fallbackEmbed" title="Lecteur YouTube de secours" style="display:none;width:100%;aspect-ratio:16/9;border:0;border-radius:14px;margin:12px 0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 <audio id="audioPlayer" controls playsinline preload="metadata" style="display:none"></audio>
-<div class="actions" style="margin:12px 0"><button class="primary" id="backgroundAudio" type="button">♫ Passer à l'audio · garder la position</button></div>
+<div class="actions" style="margin:12px 0"><button class="primary" id="backgroundAudio" type="button" hidden>Mode audio externe indisponible</button></div>
 <div id="playerError" class="notice" style="display:none"></div>
 <div class="playertext"><div><h2 id="watchTitle">Chargement…</h2><p class="muted" id="watchAuthor"></p></div><div class="actions"><button class="secondary" id="favCurrent">♡ Favoris</button><button class="secondary" id="shareCurrent">↗ Partager</button></div></div>
-<p class="playerhelp">Le mode audio natif peut continuer en arrière-plan ou sur écran verrouillé si le navigateur et la source l’autorisent. Les vidéos YouTube intégrées peuvent se mettre en pause lors du verrouillage de l’écran, sur Android comme sur iPhone. L’audio dépend de fournisseurs externes et n’est pas garanti pour toutes les vidéos.</p>
-<div class="playback-actions">
+<p class="playerhelp">Le lecteur YouTube intégré s’arrête généralement lorsque l’écran est verrouillé. Pour écouter écran verrouillé, utilise le bouton « Continuer dans YouTube » ci-dessous : la lecture en arrière-plan dans l’application YouTube dépend notamment de YouTube Premium. Une connexion Google à JabouTube ne débloque pas cette fonction.</p>
+<div class="playback-actions" hidden>
   <button class="secondary" id="switchVideo" type="button">▶ Revenir à la vidéo</button>
   <button class="secondary" id="pipButton" type="button">▣ Fenêtre flottante (PiP)</button>
   <button class="secondary" id="directPlayer" type="button">Essayer la lecture vidéo native</button>
 </div>
-<div class="playback-info" id="playbackInfo" role="status">Passe de la vidéo à l'audio sans perdre ta position.</div>
-<button class="secondary" id="openOriginal">Ouvrir la vidéo sur YouTube ↗</button>
+<div class="playback-info" id="playbackInfo" role="status">Tu peux regarder ici, ou continuer à la même position dans l’application YouTube.</div>
+<button class="primary" id="openOriginal">▶ Continuer dans YouTube (écran verrouillé avec Premium)</button>
 </div></div>
 <script src="./auth.js" defer></script>
 <script src="./app.js" defer></script>
