@@ -923,7 +923,24 @@ function continueInOfficialYoutube(){
     window.open(link,"_blank","noopener,noreferrer");
   }
 }
-$("lockAudio").onclick=continueInOfficialYoutube;
+function continueInNativeAndroidAudio(){
+  if(!state.playing)return;
+  if(!/Android/i.test(navigator.userAgent||"")){continueInOfficialYoutube();return;}
+  const id=String(state.playing.id||"");
+  if(!/^[A-Za-z0-9_-]{11}$/.test(id))return;
+  const seconds=Math.max(0,Math.floor(currentPlaybackPosition()));
+  // Stop the embedded YouTube player before starting the separate native
+  // Media3 audio player, otherwise two soundtracks could overlap.
+  stopPlayers();
+  const help="https://jaboutude-server.onrender.com/android-audio.html";
+  // Android Chrome can route a user-clicked intent to our installed companion.
+  // An uninstalled app falls back to a page explaining the APK installation.
+  const intent="intent://play/"+encodeURIComponent(id)+"?t="+seconds+
+    "#Intent;scheme=jaboutube-audio;package=com.jaboutube.background;"+
+    "S.browser_fallback_url="+encodeURIComponent(help)+";end";
+  location.href=intent;
+}
+$("lockAudio").onclick=continueInNativeAndroidAudio;
 $("openOriginal").onclick=continueInOfficialYoutube;
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("playerOverlay").classList.contains("open")){$("closePlayer").click()}});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
