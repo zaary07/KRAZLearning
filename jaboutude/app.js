@@ -198,7 +198,7 @@ function showYouTubeVideo(startSeconds=0){
       (seconds?"&start="+seconds:"");
   iframe.src=url;
   playback.mode="embed";updatePosition(seconds,true);startProgressTracker();
-  setPlaybackInfo("Vidéo à "+time(seconds)+". Appuie sur ▶ si Safari ne lance pas automatiquement.");
+  setPlaybackInfo("Vidéo à "+time(seconds)+". Appuie sur ▶ si le navigateur ne lance pas automatiquement.");
   loadIframeAPI().then(()=>{
     if(playback.ytInstance!==token||playback.mode!=="embed"||state.playing?.id!==item.id)return;
     try{
@@ -354,8 +354,8 @@ async function startBackgroundAudio(){
     audio.onended=()=>{syncMiniPlayer();if("mediaSession" in navigator)navigator.mediaSession.playbackState="none"};
     audio.onerror=()=>{playerMessage("Le flux audio a été interrompu par le serveur.");syncMiniPlayer()};
     syncMiniPlayer();syncPlayerButtons();
-    setPlaybackInfo("Audio synchronisé à "+time(from)+". Tu peux verrouiller l’écran si iOS autorise cette lecture.");
-    await audio.play().catch(()=>playerMessage("Sur iPhone, appuie sur ▶ dans le lecteur audio pour reprendre à "+time(from)+"."));
+    setPlaybackInfo("Audio synchronisé à "+time(from)+". Tu peux verrouiller l’écran si ton navigateur autorise cette lecture.");
+    await audio.play().catch(()=>playerMessage("Sur mobile, appuie sur ▶ dans le lecteur audio pour reprendre à "+time(from)+"."));
   }catch(error){playerMessage("Impossible de passer à l’audio : "+error.message+" Le lecteur vidéo reste disponible.")}
   finally{if(switchId===playback.switching){button.disabled=false;button.textContent="♫ Passer à l'audio · garder la position"}}
 }
@@ -386,7 +386,7 @@ async function tryDirectPlayer({forPip=false}={}){
     native.pause();native.src=src;native.style.display="block";
     native.onplay=()=>{playback.mode="native";syncPlayerButtons()};
     native.ontimeupdate=()=>updatePosition(native.currentTime);
-    native.onerror=()=>{playerMessage("Le flux vidéo natif n’est pas compatible avec Safari. Reviens à la vidéo YouTube.");setPlaybackInfo("Flux natif indisponible sur cet iPhone.")};
+    native.onerror=()=>{playerMessage("Le flux vidéo natif n’est pas compatible avec ce navigateur. Reviens à la vidéo YouTube.");setPlaybackInfo("Flux natif indisponible sur cet iPhone.")};
     native.load();
     await new Promise((resolve,reject)=>{
       if(native.readyState>=1){resolve();return}
