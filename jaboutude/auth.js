@@ -3,6 +3,40 @@
   const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false,familyOnly:true,familyReady:false,authorized:false,inviteOnly:false,familySession:null,googleProfile:null};
 
   const FAMILY_SESSION_KEY="jaboutube.family.session.v1";
+  // This is deliberately sessionStorage, not long-term localStorage: tokens
+  // survive a page refresh in the current tab only, until Google expires them.
+  const GOOGLE_SESSION_PREFIX="jaboutube.youtube.oauth.session.v1.";
+  const googleCacheKey=()=>state.profile?.sub?GOOGLE_SESSION_PREFIX+String(state.profile.sub):null;
+  function clearGoogleCache(){
+    const key=googleCacheKey();
+    if(key)try{sessionStorage.removeItem(key)}catch{}
+  }
+  function rememberGoogleSession(){
+    const key=googleCacheKey();
+    if(!key||!state.token||!state.googleProfile?.sub||state.expiresAt<=Date.now()+12000)return;
+    try{sessionStorage.setItem(key,JSON.stringify({
+      token:state.token,expiresAt:state.expiresAt,
+      googleProfile:{sub:state.googleProfile.sub,name:state.googleProfile.name||"",email:state.googleProfile.email||"",picture:state.googleProfile.picture||""},
+      youtubeConnected:state.youtubeConnected
+    }))}catch{}
+  }
+  async function restoreGoogleSession(){
+    const key=googleCacheKey();if(!key)return;
+    let cached=null;
+    try{cached=JSON.parse(sessionStorage.getItem(key)||"null")}catch{}
+    if(!cached)return;
+    if(!cached.token||!cached.googleProfile?.sub||!Number.isFinite(cached.expiresAt)||cached.expiresAt<=Date.now()+12000){
+      clearGoogleCache();return;
+    }
+    state.token=String(cached.token);
+    state.expiresAt=cached.expiresAt;
+    state.googleProfile=cached.googleProfile;
+    state.youtubeConnected=cached.youtubeConnected===true;
+    state.error="";
+    state.loading=state.youtubeConnected;
+    notify();
+    if(state.youtubeConnected)await fetchCollections();
+  }
   const apiBase=()=>window.JaboutubeApiBase||"";
   async function inviteApi(path,options={}){
     const response=await fetch(apiBase()+"/api"+path,{cache:"no-store",...options});
@@ -59,7 +93,7 @@
       state.familyReady=!!d.familyReady;
       state.inviteOnly=!!d.inviteOnly;
       notify();
-      if(state.inviteOnly){await restoreInviteSession();return;}
+      if(state.inviteOnly){await restoreInviteSession();if(state.authorized)await restoreGoogleSession();return;}
     }catch(error){fail(error)}
   }
   function loadGoogle(){
@@ -96,10 +130,15 @@
     ]);
     state.playlists=requests[0].status==="fulfilled"?requests[0].value.items||[]:[];
     state.subscriptions=requests[1].status==="fulfilled"?requests[1].value.items||[]:[];
-    if(requests.some(x=>x.status==="rejected")){
-      const errors=requests.filter(x=>x.status==="rejected").map(x=>String(x.reason?.message||"Erreur d’autorisation")).slice(0,2);
-      state.error="Google connecté, mais l’accès aux playlists ou abonnements est refusé : "+errors.join(" ; ")+". Vérifie YouTube Data API v3 et les autorisations Google Cloud.";
-    }else state.error="";
+    const errors=requests.filter(x=>x.status==="rejected").map(x=>String(x.reason?.message||"Erreur d’autorisation")).slice(0,2);
+    if(errors.some(x=>/\b401\b|invalid credentials|invalid authentication|session google expirée/i.test(x))){
+      clearGoogleCache();
+      state.token=null;state.googleProfile=null;state.youtubeConnected=false;state.expiresAt=0;
+      state.playlists=[];state.subscriptions=[];
+      state.error="La session Google a expiré. Relie ton compte YouTube depuis Mon compte.";
+    }else if(errors.length){
+      state.error="Google connecté, mais l’accès aux playlists ou abonnements est refusé : "+errors.join(" ; ")+".";
+    }else{state.error="";rememberGoogleSession()}
     state.loading=false;notify();
   }
   async function acceptLogin(response){
@@ -113,6 +152,7 @@
     if(state.inviteOnly){
       if(!state.authorized||!state.familySession)throw Error("Ouvre d’abord ton lien personnel JabouTube.");
       state.googleProfile=profile;
+      rememberGoogleSession();
       state.loading=false;notify();return;
     }
     if(state.familyOnly){
@@ -153,7 +193,9 @@
     state.googleProfile=nextProfile;
     state.token=nextToken;
     state.expiresAt=Date.now()+Math.max(60,Number(response.expires_in||3500))*1000;
-    state.youtubeConnected=true;state.error="";notify();
+    state.youtubeConnected=true;state.error="";
+    rememberGoogleSession();
+    notify();
     await fetchCollections();
   }
   async function connect(){
@@ -192,6 +234,7 @@
     }catch(error){fail(error);throw error}
   }
   function disconnect(){
+    clearGoogleCache();
     if(state.inviteOnly)localStorage.removeItem(FAMILY_SESSION_KEY);
     state.familySession=null;
     state.token=null;state.profile=null;state.googleProfile=null;state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;state.authorized=false;state.expiresAt=0;state.loading=false;
@@ -199,6 +242,7 @@
     notify();
   }
   function disconnectGoogle(){
+    clearGoogleCache();
     state.token=null;state.googleProfile=null;state.expiresAt=0;
     state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;
     state.loading=false;state.error="";notify();
