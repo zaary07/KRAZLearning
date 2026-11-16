@@ -262,5 +262,8 @@
     if(state.inviteOnly)return state.authorized?state.familySession:null;
     return state.authorized&&state.token&&Date.now()<state.expiresAt-12000?state.token:null;
   }
-  window.JabouAuth={state,subscribe,init,connect,connectYoutube,disconnect,disconnectGoogle,playlistItems,getAccessToken};
+  function getYoutubeToken(){
+    return state.youtubeConnected&&state.token&&Date.now()<state.expiresAt-20000?state.token:null;
+  }
+  window.JabouAuth={state,subscribe,init,connect,connectYoutube,disconnect,disconnectGoogle,playlistItems,getAccessToken,getYoutubeToken};
 })();
