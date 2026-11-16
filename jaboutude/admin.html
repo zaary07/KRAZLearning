@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>Invitations familiales — JabouTube</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;color-scheme:dark;color:#faf8fe;background:#0b0d12}
+*{box-sizing:border-box}body{margin:0;padding:25px 17px;min-height:100vh}
+main{max-width:640px;margin:4vh auto;padding:30px 25px;background:#151923;border:1px solid #32394b;border-radius:22px}
+a{color:#ff8dab}h1{font-size:clamp(23px,4vw,34px);margin:15px 0}
+p{line-height:1.65;color:#b5c0d3}
+label{display:block;margin:20px 0 8px;font-weight:650}
+input{width:100%;font:inherit;padding:15px;color:#fff;background:#0b1019;border:1px solid #47536b;border-radius:12px}
+button{font:inherit;cursor:pointer;padding:13px 18px;border:0;border-radius:12px;color:#fff;background:#f14472;font-weight:700}
+button:disabled{opacity:.55}button.secondary{background:#313b51}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:17px}
+.notice{background:#222d3d;border-radius:12px;padding:15px;margin-top:17px;color:#dee5ef}
+#error{color:#ffb2ba}
+#result{display:none}
+#link{font-size:14px;overflow-wrap:anywhere;display:block;background:#090d14;padding:12px;margin-top:10px;border-radius:10px}
+small{color:#9da9b8}
+</style></head>
+<body><main><a href="./">← Revenir à JabouTube</a>
+<h1>Inviter un membre de la famille</h1>
+<p>Une personne = un lien personnel. Elle ouvre son lien sur son téléphone, rejoint automatiquement son espace et reste connectée sur cet appareil.</p>
+<form id="invitation">
+<label for="key">Clé administrateur</label><input id="key" type="password" autocomplete="off" required placeholder="Clé privée du propriétaire">
+<label for="name">Prénom ou surnom du membre</label><input id="name" maxlength="60" minlength="2" required placeholder="Exemple : Papa, Maman, Ayesha…">
+<div class="actions"><button type="submit" id="create">Créer son lien personnel</button></div>
+</form>
+<p id="error" role="alert"></p>
+<section id="result" aria-live="polite"><div class="notice">
+<strong>Invitation prête !</strong>
+<small style="display:block;margin-top:8px">Ce lien peut être réutilisé par une autre personne tant qu'il est valide : transmets-le uniquement au bon membre. Après ouverture, la session est enregistrée sur son appareil.</small>
+<code id="link"></code>
+<div class="actions"><button class="secondary" id="copy" type="button">Copier le lien</button><button class="secondary" id="share" type="button">Partager</button></div>
+<p id="expires"></p>
+</div></section>
+<p><small>Les liens expirent au bout de 14 jours. Une fois activée, la session locale reste valable au maximum 365 jours. Une réinstallation ou un nettoyage des données peut nécessiter une nouvelle invitation.</small></p>
+</main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const API=location.hostname==="jaboutude-ios.onrender.com"?"https://jaboutude-server.onrender.com":"";
+let generated="";
+$("invitation").addEventListener("submit",async event=>{
+ event.preventDefault();$("error").textContent="";$("result").style.display="none";
+ $("create").disabled=true;
+ try{
+  const response=await fetch(API+"/api/family/invite",{method:"POST",headers:{"content-type":"application/json","x-admin-key":$("key").value},body:JSON.stringify({name:$("name").value.trim()}),cache:"no-store"});
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(body.error||"Création impossible.");
+  generated=body.inviteUrl;
+  $("link").textContent=generated;
+  $("expires").textContent="Expiration du lien : "+new Date(body.expiresAt).toLocaleDateString("fr-FR");
+  $("result").style.display="block";
+ }catch(error){$("error").textContent=error.message}
+ finally{$("create").disabled=false}
+});
+$("copy").onclick=()=>navigator.clipboard.writeText(generated).then(()=>$("copy").textContent="Lien copié").catch(()=>{prompt("Copie le lien :",generated)});
+$("share").onclick=async()=>{
+ if(!navigator.share){$("copy").click();return;}
+ try{await navigator.share({title:"Invitation JabouTube",text:"Voici ton accès personnel à JabouTube :",url:generated})}catch{}
+};
+</script></body></html>
