@@ -162,7 +162,7 @@ function renderHome(){
     '<span class="tag">'+recommendations.length+' vidéos</span></div>'+
     '<p class="muted">Selon ton activité JabouTube, tes favoris et les abonnements YouTube accessibles.</p>'+
     chips+intro+'<div class="feed-results">'+grid+'</div>'+error+footer+historySection+'</section>';
-  const importer=$("homeImport");if(importer)importer.onclick=()=>{setTab("settings");$("importData")?.click()};
+  const importer=$("homeImport");if(importer)importer.onclick=()=>$("globalHistoryFile")?.click();
   const more=$("feedMore");if(more)more.onclick=()=>loadMoreFeed();
   const retry=$("feedRetry");if(retry)retry.onclick=()=>{feedState.error="";loadMoreFeed()};
   document.querySelectorAll("[data-feed-topic]").forEach(btn=>btn.onclick=()=>startPersonalizedHome(btn.dataset.feedTopic||""));
@@ -271,7 +271,7 @@ function renderHistory(){
     '<a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Historique YouTube original</a></div>'+
     (shown.length?cards(shown):'<div class="empty">Aucune vidéo dans ton historique JabouTube pour le moment. Tu peux importer ton historique YouTube au format JSON.</div>')+
     (shown.length<state.items.length?'<div class="actions" style="justify-content:center;margin:20px 0"><button class="secondary" id="historyMore">Afficher plus ('+shown.length+' / '+state.items.length+')</button></div>':'');
-  $("historyImport").onclick=()=>{setTab("settings");$("importData")?.click()};
+  $("historyImport").onclick=()=>$("globalHistoryFile")?.click();
   if($("historyMore"))$("historyMore").onclick=()=>{historyPageSize+=80;renderHistory()};
 }
 function renderMusic(){
@@ -646,8 +646,8 @@ async function togglePictureInPicture(){
 function settingsHtml(){return '<div class="settings">'+
 '<h2>Compte personnel</h2><p class="muted">'+(window.JabouAuth?.state?.inviteOnly?'Un lien personnel suffit pour rejoindre JabouTube. Ton appareil est ensuite reconnu automatiquement.':'Connecte-toi depuis l’onglet Compte pour accéder à ton espace.')+'</p><button class="primary" data-tab="account">Ouvrir le compte</button>'+
 '<h2 style="margin-top:24px">Historique personnel</h2><p class="muted">'+state.history.length+' vidéos consultées · '+state.favorites.length+' favoris</p>'+
-'<div class="actions"><button class="secondary" id="exportData">Exporter</button><button class="secondary" id="importData">Importer un JSON</button><input type="file" id="importInput" accept=".json,application/json" hidden><button class="secondary" id="clearHistory">Effacer l’historique</button></div>'+
-'<div class="notice"><b>Importer ton historique YouTube :</b> importe le fichier JSON Google Takeout (watch-history.json) ou un fichier JabouTube préparé. Jusqu’à '+HISTORY_LIMIT+' vidéos uniques peuvent être conservées sur cet appareil. Cela reste une copie locale, pas une synchronisation permanente.</div>'+
+'<div class="actions"><button class="secondary" id="exportData">Exporter</button><button class="secondary" id="importData">Importer mon ZIP ou JSON</button><input type="file" id="importInput" accept=".zip,.json,.html,application/zip,application/json,text/html" hidden><button class="secondary" id="clearHistory">Effacer l’historique</button></div>'+
+'<div class="notice"><b>Importer ton historique YouTube :</b> choisis directement ton archive ZIP téléchargée depuis Google Takeout. JabouTube retrouve automatiquement le fichier d’historique à l’intérieur, sans extraire ni manipuler de JSON. Le traitement reste sur ton appareil. Jusqu’à '+HISTORY_LIMIT+' vidéos uniques.</div>'+
 '<h2 style="margin-top:24px">Diagnostic</h2><button class="secondary" id="testServer">Tester la connexion vidéo</button>'+
 '<div class="notice">Le serveur gratuit peut se mettre en veille, ce qui ralentit la première ouverture. La connexion aux flux vidéo dépend des services disponibles.</div></div>';}
 
@@ -677,7 +677,14 @@ function renderInviteAccount(auth){
      '<p class="muted">Associe ton compte Google pour consulter tes playlists et abonnements personnels. Cette connexion ne remplace pas ton espace familial.</p>'+
      '<button class="primary" data-connect-youtube '+(!auth.configured||auth.loading?'disabled':'')+'>Connecter Google / YouTube</button>'+
      (!auth.configured?'<p class="setup-note">Connexion temporairement indisponible : le propriétaire doit encore activer Google OAuth et YouTube Data API v3. La clé familiale ne résout pas cette configuration.</p>':'');
-  $("content").innerHTML='<div class="settings account-area">'+account+google+
+  const historySetup=p?
+    '<div class="takeout-setup"><h2>Personnaliser mon accueil YouTube</h2>'+
+    '<p>JabouTube apprend automatiquement tes goûts avec tes abonnements et tes vidéos regardées ici.</p>'+
+    '<p>Pour récupérer tes anciennes préférences YouTube, demande une seule fois ton historique dans Google Takeout, puis sélectionne directement son ZIP ici. Aucun JSON à extraire, aucun passage par ChatGPT.</p>'+
+    '<div class="actions"><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">1. Obtenir mon archive Google</a>'+
+    '<button class="primary" type="button" data-import-history>2. Importer mon ZIP automatiquement</button></div>'+
+    '<p class="muted">'+state.history.length+' vidéos enregistrées sur cet appareil. Aucune archive envoyée au serveur.</p></div>':'';
+  $("content").innerHTML='<div class="settings account-area">'+account+google+historySetup+
     (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
     '<p class="muted">Historique et favoris locaux, distincts pour chaque membre sur ce navigateur. L’historique de ton compte YouTube peut être importé depuis Google Takeout, mais ne se synchronise pas automatiquement.</p>'+
     '<div class="headrow"><a href="./privacy.html">Confidentialité</a> <a href="./terms.html">Conditions d’utilisation</a></div></div>';
@@ -747,46 +754,67 @@ function renderSettings(){
   };
   $("importData").onclick=()=>$("importInput").click();
   $("importInput").onchange=async e=>{
-    const file=e.target.files?.[0];if(!file)return;
-    if(file.size>25_000_000){status("Fichier trop grand (maximum 25 Mo).");return;}
-    if(familyLocked()){status("Ouvre ton espace personnel avant d’importer.");return;}
-    try{
-      const json=JSON.parse(await file.text());
-      // Import Google Takeout watch-history.json, compact JabouTube imports or backups.
-      const input=Array.isArray(json?.history)?json.history:Array.isArray(json)?json:null;
-      if(!input)throw Error("Format non reconnu. Sélectionne watch-history.json ou un fichier JabouTube JSON.");
-      const records=new Map();
-      const convert=entry=>{
-        const id=String(entry.id||getVideoIdFromURL(entry.titleUrl||""));
-        if(!/^[-\w]{11}$/.test(id))return null;
-        const title=String(entry.title||"Vidéo YouTube").replace(/^(Watched |Vous avez regardé\s+)/i,"").trim().slice(0,300);
-        const author=String(entry.author||entry.subtitles?.[0]?.name||"").slice(0,140);
-        const date=String(entry.watchedAt||entry.time||"");
-        return {id,title,author,thumb:"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg",
-          duration:Number(entry.duration)||0,watchedAt:/^\d{4}-\d{2}-\d{2}T/.test(date)?date:"",
-          watchCount:Math.max(1,Number(entry.watchCount)||1)};
-      };
-      // The latest view of each video is kept, without dropping newer JabouTube views.
-      for(const item of [...state.history,...input]){
-        if(!item||typeof item!=="object")continue;
-        const entry=convert(item);if(!entry)continue;
-        const prior=records.get(entry.id);
-        if(!prior||entry.watchedAt>prior.watchedAt)records.set(entry.id,entry);
-      }
-      const next=[...records.values()].sort((a,b)=>b.watchedAt.localeCompare(a.watchedAt)).slice(0,HISTORY_LIMIT);
-      if(!next.length)throw Error("Aucune vidéo YouTube valide dans le fichier.");
-      save(KEYS.history,next); // Write first: keep prior state if storage quota fails.
-      state.history=next;
-      if(Array.isArray(json?.favorites)){state.favorites=json.favorites.filter(x=>x&&/^[-\w]{11}$/.test(x.id)).slice(0,2000);save(KEYS.favs,state.favorites);}
-      historyPageSize=80;
-      setTab("history");
-      status(next.length+" vidéos uniques dans ton historique personnel (maximum "+HISTORY_LIMIT+").");
-    }catch(err){status("Import impossible : "+err.message);}
+    const file=e.target.files?.[0];
+    try{if(file)await importHistoryFile(file);}
+    catch(error){console.warn("Import local Google Takeout",error?.message||error);}
     finally{e.target.value="";}
   };
   $("clearHistory").onclick=()=>{if(confirm("Effacer ton historique enregistré sur cet appareil ?")){state.history=[];save(KEYS.history,[]);renderSettings();}};
 }
+async function importHistoryFile(file){
+  if(familyLocked())throw Error("Ouvre d’abord ton espace familial.");
+  status("Lecture de ton historique Google Takeout sur ton appareil…");
+  try{
+    const parsed=await window.JabouImport.parseFile(file);
+    const json=parsed.data;
+    const incoming=Array.isArray(json?.history)?json.history:Array.isArray(json)?json:null;
+    if(!incoming)throw Error("Format d’historique non reconnu. Choisis Google Takeout ZIP ou un fichier watch-history.json.");
+    const records=new Map();
+    const convert=entry=>{
+      if(!entry||typeof entry!=="object")return null;
+      const id=String(entry.id||getVideoIdFromURL(entry.titleUrl||""));
+      if(!/^[-\w]{11}$/.test(id))return null;
+      const title=String(entry.title||"Vidéo YouTube").replace(/^(Watched |Vous avez regardé\s+)/i,"").trim().slice(0,300);
+      const author=String(entry.author||entry.subtitles?.[0]?.name||"").slice(0,140);
+      const rawDate=String(entry.watchedAt||entry.time||"");
+      const watchedAt=/^\d{4}-\d{2}-\d{2}T/.test(rawDate)?rawDate:"";
+      return {id,title,author,thumb:"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg",
+        duration:Number(entry.duration)||0,watchedAt,watchCount:Math.max(1,Number(entry.watchCount)||1)};
+    };
+    for(const entry of [...state.history,...incoming]){
+      const video=convert(entry);if(!video)continue;
+      const prior=records.get(video.id);
+      if(!prior||video.watchedAt>prior.watchedAt)records.set(video.id,video);
+    }
+    const next=[...records.values()].sort((a,b)=>b.watchedAt.localeCompare(a.watchedAt)).slice(0,HISTORY_LIMIT);
+    if(!next.length)throw Error("Aucune vidéo YouTube identifiable dans ce fichier.");
+    save(KEYS.history,next);
+    state.history=next;
+    if(Array.isArray(json?.favorites)){
+      state.favorites=json.favorites.filter(x=>x&&/^[-\w]{11}$/.test(x.id)).slice(0,2000);
+      save(KEYS.favs,state.favorites);
+    }
+    historyPageSize=80;
+    setTab("home");
+    status(next.length+" vidéos récupérées : les recommandations de ton accueil utilisent maintenant ton historique !");
+    return {count:next.length,source:parsed.source};
+  }catch(error){
+    status("Import impossible : "+String(error?.message||error));
+    if(["account","settings","history"].includes(state.tab)){
+      const area=$("content");
+      if(area)area.insertAdjacentHTML("afterbegin",'<div class="notice">'+h("Import impossible : "+String(error?.message||error))+'</div>');
+    }
+    throw error;
+  }
+}
+$("globalHistoryFile").onchange=async e=>{
+  const file=e.target.files?.[0];
+  try{if(file)await importHistoryFile(file);}
+  catch(error){console.warn("Import local Google Takeout",error?.message||error);}
+  finally{e.target.value="";}
+};
 document.addEventListener("click",e=>{
+  if(e.target.closest("[data-import-history]")){$("globalHistoryFile")?.click();return;}
   const youtube=e.target.closest("[data-connect-youtube]");
   if(youtube){window.JabouAuth?.connectYoutube().catch(err=>status(err.message));return;}
   const login=e.target.closest("[data-login]");
@@ -844,6 +872,7 @@ $("shareCurrent").onclick=async()=>{
   if(navigator.share)try{await navigator.share({title:state.playing.title,url});return}catch{}
   navigator.clipboard?.writeText(url).then(()=>status("Lien copié")).catch(()=>prompt("Lien :",url));
 };
+$("lockAudio").onclick=()=>{$("openOriginal").click()};
 $("openOriginal").onclick=()=>{
   if(!state.playing)return;
   const seconds=Math.max(0,Math.floor(currentPlaybackPosition()));
