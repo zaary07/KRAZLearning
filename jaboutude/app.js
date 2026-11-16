@@ -925,6 +925,26 @@ function continueInOfficialYoutube(){
 }
 function continueInNativeAndroidAudio(){
   if(!state.playing)return;
+  // The iOS-native JabouTube container provides a separate AVPlayer engine.
+  // The ordinary iPhone Safari/PWA player cannot expose this bridge.
+  const nativeIOS=window.webkit?.messageHandlers?.JabouNative;
+  if(nativeIOS){
+    const id=String(state.playing.id||"");
+    const session=window.JabouAuth?.getAccessToken?.();
+    if(!/^[A-Za-z0-9_-]{11}$/.test(id)||!session){
+      setPlaybackInfo("Reconnecte-toi à ton espace familial pour activer le lecteur iOS.");return;
+    }
+    const position=Math.max(0,Math.floor(currentPlaybackPosition()));
+    const title=String(state.playing.title||"JabouTube").slice(0,200);
+    stopPlayers();
+    try {
+      nativeIOS.postMessage({type:"playAudio",id,title,position,session});
+      setPlaybackInfo("Transfert au lecteur natif iOS. La lecture peut échouer si aucun flux compatible n’est accessible.");
+    } catch(error){
+      setPlaybackInfo("Le lecteur natif iOS n’a pas répondu : "+String(error?.message||error));
+    }
+    return;
+  }
   if(!/Android/i.test(navigator.userAgent||"")){continueInOfficialYoutube();return;}
   const id=String(state.playing.id||"");
   if(!/^[A-Za-z0-9_-]{11}$/.test(id))return;
@@ -939,6 +959,14 @@ function continueInNativeAndroidAudio(){
     "#Intent;scheme=jaboutube-audio;package=com.jaboutube.background;"+
     "S.browser_fallback_url="+encodeURIComponent(help)+";end";
   location.href=intent;
+}
+// Match the label to the actual platform, rather than advertising an Android APK on iPhone.
+if(window.webkit?.messageHandlers?.JabouNative){
+  $("lockAudio").textContent="♫ Audio écran verrouillé · iOS natif";
+  $("lockAudio").title="Utiliser le lecteur AVPlayer de l’application native JabouTube iOS (expérimental).";
+}else if(/iPhone|iPad|iPod/i.test(navigator.userAgent||"")){
+  $("lockAudio").textContent="♫ Continuer dans YouTube (Premium)";
+  $("lockAudio").title="Safari ne peut pas garantir la lecture YouTube écran verrouillé ; ouvrir l’application officielle.";
 }
 $("lockAudio").onclick=continueInNativeAndroidAudio;
 $("openOriginal").onclick=continueInOfficialYoutube;
