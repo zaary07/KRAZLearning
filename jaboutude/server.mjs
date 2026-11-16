@@ -34,13 +34,13 @@ async function privateIdentity(req){
     const response=await fetch('https://oauth2.googleapis.com/tokeninfo?access_token='+encodeURIComponent(token),{signal:controller.signal,headers:{accept:'application/json'}});
     if(!response.ok)return null;
     const checked=await response.json();
-    if(String(checked.aud||checked.issued_to||'')!==GOOGLE_CLIENT_ID)return null;
-    const email=String(checked.email||'').trim().toLowerCase();
-    if(!FAMILY_EMAILS.has(email)||!['1','true'].includes(String(checked.email_verified??checked.verified_email).toLowerCase()))return null;
+    if(String(checked.aud||checked.audience||checked.issued_to||'')!==GOOGLE_CLIENT_ID)return null;
     const userResponse=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{authorization:'Bearer '+token,accept:'application/json'},signal:controller.signal});
     if(!userResponse.ok)return null;
     const user=await userResponse.json();
-    if(!user.sub||String(user.email||'').toLowerCase()!==email||user.email_verified===false)return null;
+    const email=String(user.email||checked.email||'').trim().toLowerCase();
+    const verified=['1','true'].includes(String(user.email_verified??checked.email_verified??checked.verified_email).toLowerCase());
+    if(!user.sub||!FAMILY_EMAILS.has(email)||!verified)return null;
     const identity={sub:String(user.sub),email,name:String(user.name||''),picture:String(user.picture||'')};
     authCache.set(key,{identity,expires:Date.now()+Math.min(60000,Math.max(1000,Number(checked.expires_in||60)*1000))});
     if(authCache.size>100){for(const [k,t] of authCache)if(t.expires<Date.now())authCache.delete(k);}
