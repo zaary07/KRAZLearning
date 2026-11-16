@@ -176,6 +176,41 @@ http.createServer(async(req,res)=>{
     const publicOrigin=String(process.env.JABOUTUBE_PUBLIC_URL||'https://jaboutude-server.onrender.com').replace(/\/$/,'');
     return json(res,200,{name,inviteUrl:publicOrigin+'/#invite='+token,expiresAt:new Date((now+14*86400)*1000).toISOString(),reusable:true});
   }
+  if(u.pathname==='/api/portability/archive'&&req.method==='POST'){
+    // The user's archive is streamed directly from Google's signed Cloud
+    // Storage URL to their authenticated browser. Never saved or logged.
+    if(!INVITE_READY||!inviteIdentity(req))return json(res,401,{error:'Compte familial requis.'});
+    const data=await readBody(req,12000),rawUrl=String(data.url||'');
+    let signed;
+    try{signed=new URL(rawUrl)}catch{return json(res,400,{error:'Lien Google invalide.'})}
+    const hostname=signed.hostname.toLowerCase();
+    if(rawUrl.length>10500||signed.protocol!=='https:'||signed.username||signed.password||signed.port
+      ||!(hostname==='storage.googleapis.com'||hostname.endsWith('.storage.googleapis.com')))
+      return json(res,400,{error:'Seules les archives officielles de Google Cloud Storage sont acceptées.'});
+    const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),90000);
+    try{
+      const remote=await fetch(signed.href,{redirect:'manual',signal:controller.signal,headers:{accept:'application/octet-stream,application/zip,application/json'}});
+      if(!remote.ok||!remote.body)return json(res,502,{error:'Impossible de récupérer l’archive Google. Le lien a peut-être expiré.'});
+      const limit=180*1024*1024;
+      const advertised=Number(remote.headers.get('content-length')||0);
+      if(advertised>limit)return json(res,413,{error:'Archive Google trop volumineuse (180 Mo maximum).'});
+      res.writeHead(200,{
+        'content-type':'application/octet-stream','cache-control':'private, no-store',
+        'x-content-type-options':'nosniff','access-control-allow-origin':'*','vary':'Origin',
+        'content-disposition':'attachment; filename="jaboutube-portability-archive"'
+      });
+      let bytes=0;
+      for await(const chunk of remote.body){
+        bytes+=chunk.byteLength;
+        if(bytes>limit){controller.abort();res.destroy();return;}
+        if(!res.write(chunk))await new Promise(resolve=>res.once('drain',resolve));
+      }
+      res.end();return;
+    }catch(error){
+      if(!res.headersSent)return json(res,502,{error:'Téléchargement Google indisponible. Réessaie quand l’archive est prête.'});
+      res.destroy();return;
+    }finally{clearTimeout(deadline)}
+  }
   if(u.pathname==='/api/family/claim'&&req.method==='POST'){
     if(!INVITE_READY)return json(res,503,{error:'Accès familial non configuré.'});
     const data=await readBody(req),invite=verifyFamily(data.invite,'invite');
