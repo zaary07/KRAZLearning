@@ -1,6 +1,6 @@
 "use strict";
 (function(){
-  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false};
+  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false,familyOnly:false,familyReady:false,authorized:false};
   const listeners=new Set();
   let loginClient=null,youtubeClient=null,scriptPromise=null;
   const notify=()=>listeners.forEach(fn=>{try{fn({...state})}catch(e){console.warn("Auth UI",e)}});
@@ -13,6 +13,8 @@
       const d=await resp.json();
       state.clientId=String(d.googleClientId||"");
       state.configured=!!d.googleConfigured;
+      state.familyOnly=!!d.familyOnly;
+      state.familyReady=!!d.familyReady;
       notify();
     }catch(error){fail(error)}
   }
@@ -61,7 +63,16 @@
     state.expiresAt=Date.now()+Math.max(60,Number(response.expires_in||3500))*1000;
     state.error="";state.youtubeConnected=false;
     state.playlists=[];state.subscriptions=[];
-    state.profile=await googleGet("oauth2/v3/userinfo");
+    let profile=await googleGet("oauth2/v3/userinfo");
+    if(state.familyOnly){
+      if(!state.familyReady)throw Error("Accès familial à configurer par le propriétaire.");
+      const verified=await fetch("/api/me",{headers:{Authorization:"Bearer "+state.token,Accept:"application/json"},cache:"no-store"});
+      const data=await verified.json().catch(()=>({}));
+      if(!verified.ok||!data.user?.sub)throw Error(data.error||"Ce compte n’a pas été invité à JabouTube.");
+      profile={...profile,...data.user};
+    }
+    state.profile=profile;
+    state.authorized=true;
     state.loading=false;notify();
   }
   async function acceptYoutube(response){
@@ -72,7 +83,18 @@
       state.error="Tu n’as pas autorisé YouTube. Ton compte Google reste connecté.";
       notify();return;
     }
-    state.token=response.access_token;
+    // Google may offer a different account in the separate YouTube consent flow.
+    const prior=state.profile?.sub;
+    const nextToken=response.access_token;
+    const nextProfileResponse=await fetch("https://www.googleapis.com/oauth2/v3/userinfo",{headers:{Authorization:"Bearer "+nextToken},cache:"no-store"});
+    const nextProfile=await nextProfileResponse.json().catch(()=>({}));
+    if(!nextProfileResponse.ok||!prior||prior!==nextProfile.sub)
+      throw Error("Choisis le même compte Google pour YouTube et JabouTube.");
+    if(state.familyOnly){
+      const access=await fetch("/api/me",{headers:{Authorization:"Bearer "+nextToken},cache:"no-store"});
+      if(!access.ok)throw Error("Compte familial non autorisé.");
+    }
+    state.token=nextToken;
     state.expiresAt=Date.now()+Math.max(60,Number(response.expires_in||3500))*1000;
     state.youtubeConnected=true;state.error="";notify();
     await fetchCollections();
@@ -111,7 +133,7 @@
   }
   function disconnect(){
     // Do not persist or reveal Google tokens; disconnect from this page only.
-    state.token=null;state.profile=null;state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;state.expiresAt=0;state.loading=false;state.error="";
+    state.token=null;state.profile=null;state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;state.authorized=false;state.expiresAt=0;state.loading=false;state.error="";
     notify();
   }
   async function playlistItems(playlistId){
@@ -125,5 +147,6 @@
       return {id,title:x.snippet?.title||"Vidéo YouTube",author:x.snippet?.videoOwnerChannelTitle||"",thumb:th.medium?.url||th.default?.url||"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg",duration:0};
     }).filter(Boolean);
   }
-  window.JabouAuth={state,subscribe,init,connect,connectYoutube,disconnect,playlistItems};
+  function getAccessToken(){return state.authorized&&state.token&&Date.now()<state.expiresAt-12000?state.token:null}
+  window.JabouAuth={state,subscribe,init,connect,connectYoutube,disconnect,playlistItems,getAccessToken};
 })();
