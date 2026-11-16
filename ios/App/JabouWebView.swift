@@ -3,6 +3,7 @@ import WebKit
 
 struct JabouWebView: UIViewRepresentable {
     @ObservedObject var audio: BackgroundAudioPlayer
+    let requestedURL: URL
     func makeCoordinator() -> Coordinator { Coordinator(audio: audio) }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -18,16 +19,23 @@ struct JabouWebView: UIViewRepresentable {
         web.navigationDelegate = context.coordinator
         web.uiDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
-        web.load(URLRequest(url: URL(string:"https://jaboutude-server.onrender.com")!))
+        context.coordinator.lastLoadedURL = requestedURL.absoluteString
+        web.load(URLRequest(url: requestedURL))
         context.coordinator.webView = web
         return web
     }
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        if context.coordinator.lastLoadedURL != requestedURL.absoluteString {
+            context.coordinator.lastLoadedURL = requestedURL.absoluteString
+            uiView.load(URLRequest(url: requestedURL))
+        }
+    }
 
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         let audio: BackgroundAudioPlayer
         weak var webView: WKWebView?
+        var lastLoadedURL: String = ""
         init(audio:BackgroundAudioPlayer) {self.audio=audio}
 
         func userContentController(_ controller: WKUserContentController,didReceive message: WKScriptMessage) {
