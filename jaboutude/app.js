@@ -42,7 +42,7 @@ function setTab(tab){
   else if(tab==="music"){setTitle("JABOUTUDE MUSIC","Toute ta musique.","Recherche un artiste, un titre ou colle un lien YouTube Music.");renderMusic();}
   else if(tab==="library"){setTitle("BIBLIOTHÈQUE","Ta bibliothèque.","Tes favoris locaux et les playlists YouTube de ton compte Google.");renderLibrary();}
   else if(tab==="favorites"){setTitle("TA BIBLIOTHÈQUE","Tes favoris.","Tes vidéos enregistrées sur cet appareil.");renderList(state.favorites,"Aucun favori pour l'instant.");}
-  else if(tab==="history"){setTitle("HISTORIQUE LOCAL","Vidéos regardées ici.","Ton historique JabouTube, enregistré uniquement sur cet appareil.");renderList(state.history,"Aucune vidéo regardée dans JabouTube.");}
+  else if(tab==="history"){setTitle("MON HISTORIQUE","Vidéos déjà regardées.","Tes vidéos ouvertes dans JabouTube et les vidéos YouTube que tu as importées.");renderHistory();}
   else if(tab==="account"){setTitle("MON COMPTE","Compte et YouTube.","Connexion Google, playlists, abonnements et gestion du compte.");renderAccount();}
   else {setTitle("RÉGLAGES","Paramètres.","Import, export et diagnostic de l’application.");renderSettings();}
 }
@@ -110,6 +110,18 @@ function getVideoIdFromURL(term){
     const url=new URL(term);if(!["youtube.com","www.youtube.com","m.youtube.com","music.youtube.com","youtu.be"].includes(url.hostname))return "";
     return url.hostname==="youtu.be"?url.pathname.slice(1,12):url.searchParams.get("v")||"";
   }catch{return "";}
+}
+function renderHistory(){
+  state.items=state.history.filter(x=>x?.id);
+  $("content").innerHTML=
+    '<div class="headrow"><h2>Mon historique personnel</h2><span class="tag">'+state.items.length+' vidéos</span></div>'+
+    '<div class="notice">Les vidéos déjà vues sur YouTube ne sont pas récupérables automatiquement via l’API Google. Pour les afficher ici, exporte ton historique au format JSON avec Google Takeout, puis importe <b>watch-history.json</b>. Les vidéos que tu ouvres dans JabouTube s’ajoutent automatiquement à cet historique local.</div>'+
+    '<div class="actions" style="margin:16px 0 22px">'+
+    '<button class="secondary" id="historyImport">Importer mon historique YouTube (JSON)</button>'+
+    '<a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Exporter depuis Google Takeout</a>'+
+    '<a class="secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Voir mon historique sur YouTube</a></div>'+
+    (state.items.length?cards(state.items):'<div class="empty">Aucune vidéo dans ton historique JabouTube pour le moment. Tu peux importer ton historique YouTube au format JSON.</div>');
+  $("historyImport").onclick=()=>{setTab("settings");$("importData")?.click()};
 }
 function renderMusic(){
   $("content").innerHTML='<div class="headrow"><h2>Musique et podcasts</h2><span class="tag">Lecteur audio</span></div><div class="empty"><div style="font-size:52px;margin-bottom:10px">♫</div><h2>Ton espace musique</h2><p>Recherche un titre, un artiste, un album ou colle un lien YouTube Music dans la barre de recherche.</p><div class="actions" style="justify-content:center;margin-top:18px"><button class="secondary" data-q="Musique française">Musique française</button><button class="secondary" data-q="Live acoustic music">Acoustique</button><button class="secondary" data-q="Lofi hip hop">Lo-fi</button></div></div>';
@@ -509,7 +521,7 @@ function renderInviteAccount(auth){
      (!auth.configured?'<p class="setup-note">Connexion temporairement indisponible : le propriétaire doit encore activer Google OAuth et YouTube Data API v3. La clé familiale ne résout pas cette configuration.</p>':'');
   $("content").innerHTML='<div class="settings account-area">'+account+google+
     (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
-    '<p class="muted">Historique et favoris locaux, distincts pour chaque membre sur ce navigateur. Pas encore synchronisés entre appareils.</p>'+
+    '<p class="muted">Historique et favoris locaux, distincts pour chaque membre sur ce navigateur. L’historique de ton compte YouTube peut être importé depuis Google Takeout, mais ne se synchronise pas automatiquement.</p>'+
     '<div class="headrow"><a href="./privacy.html">Confidentialité</a> <a href="./terms.html">Conditions d’utilisation</a></div></div>';
 }
 function renderAccount(){
@@ -593,7 +605,7 @@ function renderSettings(){
       state.history=[...normalList,...state.history].filter((x,i,a)=>a.findIndex(y=>y.id===x.id)===i).slice(0,2000);
       save(KEYS.history,state.history);
       if(Array.isArray(json.favorites)){state.favorites=json.favorites.filter(x=>x&&/^[-\w]{11}$/.test(x.id)).slice(0,2000);save(KEYS.favs,state.favorites);}
-      renderSettings();status(normalList.length+" vidéos importées.");
+      setTab("history");status(normalList.length+" vidéos importées dans ton historique JabouTube.");
     }catch(err){status("Import impossible : "+err.message);}
   };
   $("clearHistory").onclick=()=>{if(confirm("Effacer ton historique enregistré sur cet appareil ?")){state.history=[];save(KEYS.history,[]);renderSettings();}};
