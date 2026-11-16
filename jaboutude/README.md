@@ -51,3 +51,9 @@ Le lecteur vidéo YouTube intégré n’est **pas** un lecteur audio en arrière
 Depuis la version 2026-11-16, la connexion Google via token client est conservée temporairement dans `sessionStorage`, distincte par membre familial, ce qui évite la déconnexion lors d'un simple rafraîchissement du navigateur. **Ce n'est pas une connexion OAuth permanente :** les jetons expirent généralement après environ une heure et doivent être renouvelés par une action de l’utilisateur. L'application ne stocke ni `refresh_token` ni `client_secret` dans le navigateur. Pour une reconnexion multi-jours, il faudra une architecture serveur avec OAuth code flow, rafraîchissement et stockage sécurisé, soumise à la limite de 7 jours des refresh tokens en mode test Google.
 
 L'API YouTube Data v3 **ne permet pas de lire l'historique YouTube d’un utilisateur** (`watchHistoryNotAccessible`), même avec `youtube.readonly`. Dans l'onglet Historique, un membre peut voir ses lectures JabouTube et importer son export Google Takeout `watch-history.json` après extraction depuis l'archive. Cette copie reste locale à ce membre et cet appareil ; elle n'est pas synchronisée avec YouTube.
+
+## Import volumineux d'un historique YouTube (novembre 2026)
+
+L'importeur accepte désormais jusqu'à **8 000 vidéos uniques** (et un JSON jusqu'à 25 Mo). Il reconnaît les exports originaux `watch-history.json` et les sauvegardes JabouTube `{history:[{id,title,author,watchedAt,watchCount}]}`. L'historique est trié par dernière date de visionnage, dédupliqué par ID vidéo, et affiché par pages de 80 vignettes pour préserver les performances. Les nouvelles vidéos ouvertes dans JabouTube ne tronquent plus cet historique à 600 éléments.
+
+Chaque membre conserve son historique dans le stockage **local** de son navigateur, sans serveur de synchronisation. Les quotas de stockage locaux peuvent varier selon l'appareil ; une exportation de sauvegarde depuis Réglages reste conseillée.
