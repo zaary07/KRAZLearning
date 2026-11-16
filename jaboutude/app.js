@@ -445,6 +445,7 @@ function stopPlayers(){
   }
   playback.mode="none";playback.audioSrc="";
   $("miniPlayer").hidden=true;
+  const actions=$("playbackActions");if(actions)actions.hidden=true;
   $("backgroundAudio").disabled=false;
   $("backgroundAudio").textContent="♫ Passer en audio · garder la position";
   $("lockAudio").textContent="♫ Passer en audio";
@@ -478,6 +479,8 @@ function prepareMediaSession(item){
 }
 function syncPlayerButtons(){
   $("switchVideo").disabled=!state.playing||playback.mode==="embed";
+  const actions=$("playbackActions");
+  if(actions)actions.hidden=playback.mode!=="audio"&&playback.mode!=="native";
   const btn=$("pipButton");
   btn.textContent=playback.mode==="native"?"▣ Passer en Picture-in-Picture":"▣ Activer le Picture-in-Picture";
 }
