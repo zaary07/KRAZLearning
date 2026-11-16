@@ -1,6 +1,6 @@
 "use strict";
 (function(){
-  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false,familyOnly:false,familyReady:false,authorized:false};
+  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false,familyOnly:true,familyReady:false,authorized:false};
   const listeners=new Set();
   let loginClient=null,youtubeClient=null,scriptPromise=null;
   const notify=()=>listeners.forEach(fn=>{try{fn({...state})}catch(e){console.warn("Auth UI",e)}});
