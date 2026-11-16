@@ -230,7 +230,7 @@
           error_callback:r=>fail(r?.message||r?.type||"Autorisation YouTube annulée")
         });
       }
-      youtubeClient.requestAccessToken({prompt:"consent"});
+      youtubeClient.requestAccessToken({prompt:"select_account"});
     }catch(error){fail(error);throw error}
   }
   function disconnect(){
