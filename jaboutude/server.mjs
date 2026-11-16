@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 10000);
@@ -11,6 +12,41 @@ const HOSTS = [
   'https://invidious.tiekoetter.com',
   'https://inv.nadeko.net'
 ];
+// Private mode is enabled once the owner sets JABOUTUBE_ALLOWED_EMAILS
+// (comma-separated verified Google addresses) in the Render environment.
+const GOOGLE_CLIENT_ID=String(process.env.GOOGLE_CLIENT_ID||'').trim();
+const FAMILY_EMAILS=new Set(String(process.env.JABOUTUBE_ALLOWED_EMAILS||'')
+  .split(',').map(x=>x.trim().toLowerCase()).filter(x=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)));
+const FAMILY_ONLY=FAMILY_EMAILS.size>0;
+const FAMILY_READY=FAMILY_ONLY&&/^[0-9]+-[a-z0-9-]+\.apps\.googleusercontent\.com$/.test(GOOGLE_CLIENT_ID);
+const authCache=new Map();
+async function privateIdentity(req){
+  if(!FAMILY_READY)return null;
+  const header=String(req.headers.authorization||'');
+  if(!header.startsWith('Bearer '))return null;
+  const token=header.slice(7).trim();
+  if(token.length<25||token.length>4096)return null;
+  const key=createHash('sha256').update(token).digest('hex');
+  const cached=authCache.get(key);
+  if(cached&&cached.expires>Date.now())return cached.identity;
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),6000);
+  try{
+    const response=await fetch('https://oauth2.googleapis.com/tokeninfo?access_token='+encodeURIComponent(token),{signal:controller.signal,headers:{accept:'application/json'}});
+    if(!response.ok)return null;
+    const checked=await response.json();
+    if(String(checked.aud||checked.issued_to||'')!==GOOGLE_CLIENT_ID)return null;
+    const email=String(checked.email||'').trim().toLowerCase();
+    if(!FAMILY_EMAILS.has(email)||!['1','true'].includes(String(checked.email_verified??checked.verified_email).toLowerCase()))return null;
+    const userResponse=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{authorization:'Bearer '+token,accept:'application/json'},signal:controller.signal});
+    if(!userResponse.ok)return null;
+    const user=await userResponse.json();
+    if(!user.sub||String(user.email||'').toLowerCase()!==email||user.email_verified===false)return null;
+    const identity={sub:String(user.sub),email,name:String(user.name||''),picture:String(user.picture||'')};
+    authCache.set(key,{identity,expires:Date.now()+Math.min(60000,Math.max(1000,Number(checked.expires_in||60)*1000))});
+    if(authCache.size>100){for(const [k,t] of authCache)if(t.expires<Date.now())authCache.delete(k);}
+    return identity;
+  }catch{return null}finally{clearTimeout(timeout)}
+}
 const cache = new Map();
 const inFlight = new Map();
 const hostCooldown = new Map();
@@ -90,10 +126,19 @@ http.createServer(async(req,res)=>{
     }finally{clearTimeout(deadline);}
   }
   if(u.pathname==='/api/config'){
-    const clientId=String(process.env.GOOGLE_CLIENT_ID||'').trim();
-    return json(res,200,{googleConfigured:/^[0-9]+-[a-z0-9-]+\.apps\.googleusercontent\.com$/.test(clientId),googleClientId:clientId});
+    return json(res,200,{googleConfigured:/^[0-9]+-[a-z0-9-]+\.apps\.googleusercontent\.com$/.test(GOOGLE_CLIENT_ID),googleClientId:GOOGLE_CLIENT_ID,familyOnly:FAMILY_ONLY,familyReady:FAMILY_READY});
   }
-  if(u.pathname==='/api/health')return json(res,200,{ok:true,source:'Invidious public instances',historySync:false,server:'JabouTube'});
+  if(u.pathname==='/api/health')return json(res,200,{ok:true,source:'Invidious public instances',historySync:false,server:'JabouTube',familyOnly:FAMILY_ONLY});
+  if(u.pathname==='/api/me'||u.pathname==='/api/trending'||u.pathname==='/api/search'||u.pathname.startsWith('/api/streams/')){
+    if(FAMILY_ONLY){
+      if(!FAMILY_READY)return json(res,503,{error:'Accès familial non configuré : GOOGLE_CLIENT_ID manquant ou invalide.'});
+      const identity=await privateIdentity(req);
+      if(!identity)return json(res,401,{error:'Compte non autorisé. Connecte-toi avec une adresse Google invitée par la famille.'});
+      if(u.pathname==='/api/me')return json(res,200,{user:identity});
+    }else if(u.pathname==='/api/me'){
+      return json(res,409,{error:'Mode familial non activé. Configure JABOUTUBE_ALLOWED_EMAILS.'});
+    }
+  }
   if(u.pathname==='/api/trending'){
    const data=await getCached('trending',300000,async()=>{
      const r=await upstream('/api/v1/trending?region=FR',x=>Array.isArray(x)&&x.length>0);
