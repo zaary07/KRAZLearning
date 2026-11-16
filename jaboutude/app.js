@@ -496,15 +496,22 @@ function renderLibrary(){
 }
 function renderInviteAccount(auth){
   const p=auth.profile;
-  const profile=p
-    ?'<div class="account-profile"><span class="profile-photo">✓</span><div><strong>'+h(p.name||"Membre de la famille")+'</strong><div class="muted">Espace personnel JabouTube</div></div></div>'+
-     '<div class="notice"><b>Connexion automatique active.</b> Cet appareil reconnaît ton invitation familiale. Historique et favoris sont séparés de ceux des autres membres sur ce navigateur.</div>'+
-     '<div class="actions"><button class="secondary" data-disconnect>Se déconnecter</button><button class="secondary" data-tab="library">Ma bibliothèque</button></div>'
-    :'<div class="connect-hero"><div class="google-emblem">♡</div><h2>Bienvenue sur JabouTube Famille</h2><p class="muted">Pour rejoindre ton espace privé, ouvre le lien personnel qui t’a été envoyé. Aucun compte Gmail ni mot de passe n’est nécessaire.</p><p class="muted">Après la première ouverture, ton appareil restera connecté, sauf expiration de la session ou effacement des données.</p></div>';
-  $("content").innerHTML='<div class="settings account-area">'+profile+
+  const account=p
+    ?'<div class="account-profile"><span class="profile-photo">✓</span><div><strong>'+h(p.name||"Membre de la famille")+'</strong><div class="muted">Espace JabouTube privé sur cet appareil</div></div></div>'+
+     '<div class="actions"><button class="secondary" data-disconnect>Quitter cet espace</button><button class="secondary" data-tab="library">Ma bibliothèque</button></div>'
+    :'<div class="connect-hero"><div class="google-emblem">♡</div><h2>JabouTube Famille</h2><p class="muted">Ouvre ton invitation personnelle une seule fois. Ensuite, l’appareil te reconnaît automatiquement sans clé administrateur ni mot de passe.</p></div>';
+  const google=!p?'':auth.youtubeConnected
+    ?'<div class="notice"><b>YouTube connecté</b> · '+h(auth.googleProfile?.email||auth.googleProfile?.name||"Compte Google")+'</div>'+
+     '<div class="actions"><button class="secondary" data-disconnect-google>Déconnecter YouTube</button><button class="secondary" data-tab="library">Voir mes playlists</button></div>'+
+     '<div class="headrow"><h2>Mes abonnements YouTube</h2><span class="tag">'+auth.subscriptions.length+'</span></div>'+
+     (auth.subscriptions.length?'<div class="subscriptions">'+auth.subscriptions.map(x=>'<a href="https://www.youtube.com/channel/'+encodeURIComponent(x.snippet?.resourceId?.channelId||"")+'" target="_blank" rel="noopener noreferrer">'+h(x.snippet?.title||"Chaîne YouTube")+'</a>').join("")+'</div>':'<p class="muted">Aucun abonnement accessible depuis ce compte.</p>')
+    :'<div class="headrow" style="margin-top:22px"><h2>Mon compte YouTube</h2></div>'+
+     '<p class="muted">Associe ton compte Google pour consulter tes playlists et abonnements personnels. Cette connexion ne remplace pas ton espace familial.</p>'+
+     '<button class="primary" data-connect-youtube '+(!auth.configured||auth.loading?'disabled':'')+'>Connecter Google / YouTube</button>'+
+     (!auth.configured?'<p class="setup-note">Connexion temporairement indisponible : le propriétaire doit encore activer Google OAuth et YouTube Data API v3. La clé familiale ne résout pas cette configuration.</p>':'');
+  $("content").innerHTML='<div class="settings account-area">'+account+google+
     (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
-    '<div class="notice">Chaque membre possède son espace local. Les favoris et l’historique ne sont pas encore synchronisés entre appareils et ne sont pas chiffrés localement. Un lien d’invitation transmis à quelqu’un d’autre peut être réutilisé durant sa validité.</div>'+
-    '<div class="headrow"><a href="./admin.html">Créer une invitation (propriétaire)</a></div>'+
+    '<p class="muted">Historique et favoris locaux, distincts pour chaque membre sur ce navigateur. Pas encore synchronisés entre appareils.</p>'+
     '<div class="headrow"><a href="./privacy.html">Confidentialité</a> <a href="./terms.html">Conditions d’utilisation</a></div></div>';
 }
 function renderAccount(){
@@ -598,6 +605,7 @@ document.addEventListener("click",e=>{
   if(youtube){window.JabouAuth?.connectYoutube().catch(err=>status(err.message));return;}
   const login=e.target.closest("[data-login]");
   if(login){window.JabouAuth?.connect().catch(err=>status(err.message));return;}
+  if(e.target.closest("[data-disconnect-google]")){window.JabouAuth?.disconnectGoogle();setTab("account");return;}
   if(e.target.closest("[data-disconnect]")){window.JabouAuth?.disconnect();setTab("account");return;}
   const pl=e.target.closest("[data-playlist]");
   if(pl){showPlaylist(pl.dataset.playlist);return;}
