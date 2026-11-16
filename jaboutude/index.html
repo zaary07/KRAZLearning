@@ -125,6 +125,11 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
   .searchPanel{max-height:75dvh;overflow:auto}
 }
 
+
+.playback-actions{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}
+.playback-actions button{flex:1;min-width:140px;white-space:normal}
+.playback-info{color:#a9b6d3;background:#1b2231;border:1px solid #344154;border-radius:10px;padding:10px 13px;font-size:12px;line-height:1.5}
+@media(max-width:750px){.playback-actions{display:grid;grid-template-columns:1fr 1fr}.playback-actions button{min-width:0;font-size:12px;padding:10px}.playback-actions #directPlayer{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -166,14 +171,19 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <div class="playerbackdrop" id="playerOverlay" role="dialog" aria-label="Lecteur vidéo">
 <div class="playerpanel">
 <div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><button class="secondary" id="closePlayer">↓ Réduire</button></div>
-<video id="videoPlayer" controls playsinline preload="metadata" style="display:none"></video>
+<video id="videoPlayer" controls playsinline webkit-playsinline preload="metadata" style="display:none" aria-label="Vidéo avec lecture Picture-in-Picture lorsque prise en charge"></video>
 <iframe id="fallbackEmbed" title="Lecteur YouTube de secours" style="display:none;width:100%;aspect-ratio:16/9;border:0;border-radius:14px;margin:12px 0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 <audio id="audioPlayer" controls playsinline preload="metadata" style="display:none"></audio>
-<div class="actions" style="margin:12px 0"><button class="primary" id="backgroundAudio" type="button">♫ Écouter en arrière-plan / écran verrouillé</button></div>
+<div class="actions" style="margin:12px 0"><button class="primary" id="backgroundAudio" type="button">♫ Passer à l'audio · garder la position</button></div>
 <div id="playerError" class="notice" style="display:none"></div>
 <div class="playertext"><div><h2 id="watchTitle">Chargement…</h2><p class="muted" id="watchAuthor"></p></div><div class="actions"><button class="secondary" id="favCurrent">♡ Favoris</button><button class="secondary" id="shareCurrent">↗ Partager</button></div></div>
 <p class="playerhelp">Le mode audio natif peut continuer en arrière-plan et sur écran verrouillé si Safari autorise le flux. Les vidéos YouTube intégrées peuvent se mettre en pause quand iOS verrouille l’écran. L’audio de secours dépend des serveurs communautaires et n’est pas garanti pour toutes les vidéos.</p>
-<div class="actions"><button class="secondary" id="directPlayer">Essayer la lecture directe</button></div>
+<div class="playback-actions">
+  <button class="secondary" id="switchVideo" type="button">▶ Revenir à la vidéo</button>
+  <button class="secondary" id="pipButton" type="button">▣ Fenêtre flottante (PiP)</button>
+  <button class="secondary" id="directPlayer" type="button">Essayer la lecture vidéo native</button>
+</div>
+<div class="playback-info" id="playbackInfo" role="status">Passe de la vidéo à l'audio sans perdre ta position.</div>
 <button class="secondary" id="openOriginal">Ouvrir la vidéo sur YouTube ↗</button>
 </div></div>
 <script src="./auth.js" defer></script>

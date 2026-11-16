@@ -1,4 +1,4 @@
-const CACHE="jaboutube-shell-v8";const ASSETS=["./","./index.html","./app.js","./auth.js","./privacy.html","./terms.html","./manifest.webmanifest","./icon.svg","./jaboutube-icon-192.webp","./jaboutube-icon-512.webp","./jaboutube-apple-touch-icon.png","./jaboutube-logo.webp"];
+const CACHE="jaboutube-shell-v9";const ASSETS=["./","./index.html","./app.js","./auth.js","./privacy.html","./terms.html","./manifest.webmanifest","./icon.svg","./jaboutube-icon-192.webp","./jaboutube-icon-512.webp","./jaboutube-apple-touch-icon.png","./jaboutube-logo.webp"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener("activate",e=>e.waitUntil(self.clients.claim()));
 self.addEventListener("fetch",e=>{

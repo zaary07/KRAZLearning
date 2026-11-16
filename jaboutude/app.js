@@ -104,102 +104,309 @@ function historyAdd(it){
   save(KEYS.history,state.history);
 }
 
+
+/**
+ * All players share one video timeline. Audio is always synchronized to video
+ * time (seconds) and returning to video seeks back to the audio position.
+ * Embedded YouTube uses the official IFrame Player API to read its progress.
+ */
+const playback={
+  id:null,seconds:0,mode:"none",yt:null,ytReady:false,ytInstance:0,
+  switching:0,progressTimer:null,lastSaved:0,
+  positions:stored("jaboutube.positions.v1",{}),audioSrc:""
+};
+function setPlaybackInfo(message){const el=$("playbackInfo");if(el)el.textContent=message;}
+function validSeconds(seconds){return Number.isFinite(Number(seconds))&&Number(seconds)>=0?Number(seconds):0}
+function updatePosition(seconds,force=false){
+  const n=validSeconds(seconds);if(!playback.id)return;
+  if(n<1&&playback.seconds>5&&!force)return;
+  playback.seconds=n;
+  if(n>2 && (force||Date.now()-playback.lastSaved>4200)){
+    playback.positions[playback.id]=Math.round(n);
+    playback.lastSaved=Date.now();
+    const keys=Object.keys(playback.positions);
+    if(keys.length>200){for(const k of keys.slice(0,keys.length-200))delete playback.positions[k]}
+    save("jaboutube.positions.v1",playback.positions);
+  }
+}
+function currentPlaybackPosition(){
+  const a=$("audioPlayer"),v=$("videoPlayer");
+  if(playback.mode==="audio"&&a.src&&Number.isFinite(a.currentTime)&&a.currentTime>0)return a.currentTime;
+  if(playback.mode==="native"&&v.src&&Number.isFinite(v.currentTime)&&v.currentTime>0)return v.currentTime;
+  if(playback.mode==="embed"&&playback.ytReady&&playback.yt){
+    try{const t=playback.yt.getCurrentTime();if(Number.isFinite(t)&&t>=0)return t}catch{}
+  }
+  return playback.seconds;
+}
+function updateMediaSessionPosition(){
+  if(!("mediaSession" in navigator)||typeof navigator.mediaSession.setPositionState!=="function")return;
+  try{
+    const a=$("audioPlayer");
+    if(playback.mode!=="audio"||!Number.isFinite(a.duration)||a.duration<=0)return;
+    navigator.mediaSession.setPositionState({duration:a.duration,position:Math.min(a.duration,validSeconds(a.currentTime)),playbackRate:a.playbackRate||1});
+  }catch{}
+}
+function stopProgressTracker(){
+  if(playback.progressTimer){clearInterval(playback.progressTimer);playback.progressTimer=null}
+}
+function startProgressTracker(){
+  stopProgressTracker();
+  playback.progressTimer=setInterval(()=>{
+    if(playback.mode==="none")return;
+    const p=currentPlaybackPosition();
+    if(p>=playback.seconds-1)updatePosition(p);
+    if(playback.mode==="audio")updateMediaSessionPosition();
+  },1000);
+}
+let iframeAPIPromise=null;
+function loadIframeAPI(){
+  if(window.YT&&window.YT.Player)return Promise.resolve();
+  if(iframeAPIPromise)return iframeAPIPromise;
+  iframeAPIPromise=new Promise((resolve,reject)=>{
+    const previous=window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady=()=>{try{if(typeof previous==="function")previous()}catch{} resolve()};
+    const s=document.createElement("script");
+    s.src="https://www.youtube.com/iframe_api";s.async=true;
+    s.onerror=()=>reject(Error("API YouTube indisponible"));
+    document.head.appendChild(s);
+  });
+  return iframeAPIPromise;
+}
+function clearYouTubeIframe(){
+  playback.ytInstance++;
+  const old=$("fallbackEmbed");
+  if(!old)return;
+  const fresh=old.cloneNode(false);
+  fresh.removeAttribute("src");fresh.style.display="none";
+  old.replaceWith(fresh);
+  if(playback.yt){try{playback.yt.destroy()}catch{}}
+  playback.yt=null;playback.ytReady=false;
+}
+function pauseYouTube(){
+  if(playback.yt&&playback.ytReady){try{playback.yt.pauseVideo()}catch{}}
+}
+function showYouTubeVideo(startSeconds=0){
+  const item=state.playing;if(!item)return;
+  clearYouTubeIframe();
+  const iframe=$("fallbackEmbed"),seconds=Math.max(0,Math.floor(validSeconds(startSeconds)));
+  const token=playback.ytInstance;
+  iframe.style.display="block";
+  const url="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(item.id)+
+      "?playsinline=1&rel=0&enablejsapi=1&origin="+encodeURIComponent(location.origin)+
+      (seconds?"&start="+seconds:"");
+  iframe.src=url;
+  playback.mode="embed";updatePosition(seconds,true);startProgressTracker();
+  setPlaybackInfo("Vidéo à "+time(seconds)+". Appuie sur ▶ si Safari ne lance pas automatiquement.");
+  loadIframeAPI().then(()=>{
+    if(playback.ytInstance!==token||playback.mode!=="embed"||state.playing?.id!==item.id)return;
+    try{
+      playback.yt=new YT.Player(iframe,{
+        events:{
+          onReady:event=>{
+            if(playback.ytInstance!==token)return;
+            playback.ytReady=true;
+            if(seconds>0)try{event.target.seekTo(seconds,true)}catch{}
+          },
+          onStateChange:event=>{
+            if(playback.ytInstance!==token)return;
+            try{updatePosition(event.target.getCurrentTime())}catch{}
+          }
+        }
+      });
+    }catch(error){console.info("YouTube IFrame progress tracking",error)}
+  }).catch(()=>setPlaybackInfo("Vidéo ouverte. Le suivi précis de sa position dépend de l’API YouTube."));
+}
 function stopPlayers(){
-  // Called only when changing videos or explicitly stopping audio.
-  const embed=$("fallbackEmbed");if(embed){embed.removeAttribute("src");embed.style.display="none";}
+  // Capture time first so reopening this video may resume where it stopped.
+  updatePosition(currentPlaybackPosition(),true);stopProgressTracker();
+  clearYouTubeIframe();
   for(const player of [$("videoPlayer"),$("audioPlayer")]){
     player.pause();player.removeAttribute("src");player.load();player.style.display="none";
   }
+  playback.mode="none";playback.audioSrc="";
   $("miniPlayer").hidden=true;
   $("backgroundAudio").disabled=false;
-  $("backgroundAudio").textContent="♫ Écouter en arrière-plan / écran verrouillé";
+  $("backgroundAudio").textContent="♫ Passer à l'audio · garder la position";
   if("mediaSession" in navigator)navigator.mediaSession.playbackState="none";
 }
 function playerMessage(msg){$("playerError").style.display="block";$("playerError").textContent=msg;}
 function syncMiniPlayer(){
   const audio=$("audioPlayer");
-  $("miniPlayer").hidden=!audio.src;
+  $("miniPlayer").hidden=!(playback.mode==="audio"&&audio.src);
   $("miniTitle").textContent=state.playing?.title||"Lecture audio";
-  $("miniSubtitle").textContent=audio.paused?"En pause":"Audio en cours · verrouillage possible";
+  $("miniSubtitle").textContent=audio.paused?"En pause · position "+time(audio.currentTime||playback.seconds):"Écoute · "+time(audio.currentTime||playback.seconds);
   $("miniToggle").textContent=audio.paused?"▶":"Ⅱ";
 }
 function prepareMediaSession(item){
   if(!("mediaSession" in navigator))return;
   try{
     navigator.mediaSession.metadata=new MediaMetadata({
-      title:item.title||"JabouTube",artist:item.author||"JabouTube",
-      album:"JabouTube",
+      title:item.title||"JabouTube",artist:item.author||"JabouTube",album:"JabouTube",
       artwork:[{src:item.thumb||"https://i.ytimg.com/vi/"+item.id+"/hqdefault.jpg",sizes:"512x512",type:"image/jpeg"}]
     });
     navigator.mediaSession.setActionHandler("play",()=>$("audioPlayer").play().catch(()=>{}));
     navigator.mediaSession.setActionHandler("pause",()=>$("audioPlayer").pause());
     navigator.mediaSession.setActionHandler("stop",()=>stopPlayers());
     navigator.mediaSession.setActionHandler("seekto",details=>{
-      const a=$("audioPlayer");if(Number.isFinite(details.seekTime))a.currentTime=details.seekTime;
+      const audio=$("audioPlayer");
+      if(Number.isFinite(details.seekTime)){
+        audio.currentTime=details.seekTime;updatePosition(details.seekTime,true);updateMediaSessionPosition();
+      }
     });
   }catch(error){console.info("Media Session unavailable",error)}
 }
-async function openVideo(it){
-  const id=it.id;if(!/^[-\w]{11}$/.test(String(id||""))){status("Identifiant vidéo incorrect");return;}
-  stopPlayers();
-  state.playing=it;historyAdd(it);updateFav();
-  $("watchTitle").textContent=it.title||"Vidéo YouTube";
-  $("watchAuthor").textContent=it.author||"";
+function syncPlayerButtons(){
+  $("switchVideo").disabled=!state.playing||playback.mode==="embed";
+  const btn=$("pipButton");
+  btn.textContent=playback.mode==="native"?"▣ Passer en Picture-in-Picture":"▣ Activer le Picture-in-Picture";
+}
+async function openVideo(item){
+  if(!/^[-\w]{11}$/.test(String(item?.id||""))){status("Identifiant vidéo incorrect");return;}
+  if(state.playing)stopPlayers();
+  else {stopProgressTracker();clearYouTubeIframe();}
+  state.playing=item;historyAdd(item);updateFav();
+  playback.id=item.id;
+  playback.seconds=validSeconds(playback.positions[item.id]||0);
+  playback.switching++;
+  $("watchTitle").textContent=item.title||"Vidéo YouTube";
+  $("watchAuthor").textContent=item.author||"";
   $("playerError").style.display="none";
   $("playerOverlay").classList.add("open");
-  const embed=$("fallbackEmbed");
+  syncPlayerButtons();
   if(state.music){
-    embed.style.display="none";
+    playback.mode="audio";
     $("backgroundAudio").textContent="♫ Lecture audio (écran verrouillé)";
-    // Started by direct user tap: the player is visible; the play button stays accessible.
     startBackgroundAudio().catch(e=>playerMessage(e.message));
-  }else{
-    embed.style.display="block";
-    embed.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?playsinline=1&rel=0";
-  }
-  status("Lecteur ouvert.");
+  }else showYouTubeVideo(playback.seconds);
+  status("Lecteur ouvert");
 }
 async function startBackgroundAudio(){
   const item=state.playing;if(!item)return;
-  const button=$("backgroundAudio");button.disabled=true;button.textContent="Recherche du flux audio…";
+  if(playback.mode==="audio" && $("audioPlayer").src){
+    $("audioPlayer").play().catch(()=>playerMessage("Appuie sur ▶ pour lancer l’audio."));
+    return;
+  }
+  const switchId=++playback.switching;
+  const button=$("backgroundAudio");button.disabled=true;button.textContent="Synchronisation de l'audio…";
   try{
     const data=await request("/streams/"+encodeURIComponent(item.id));
-    if(!state.playing||state.playing.id!==item.id)return;
+    if(switchId!==playback.switching||state.playing?.id!==item.id)return;
     const audioChoices=(data.audioStreams||[]).filter(x=>x.url&&/audio\/mp4/i.test(x.format||""))
       .sort((a,b)=>Math.abs((a.bitrate||128000)-128000)-Math.abs((b.bitrate||128000)-128000));
     const chosen=audioChoices[0]||(data.audioStreams||[]).find(x=>x.url);
-    if(!chosen)throw Error("Cette vidéo ne possède aucun flux audio accessible.");
+    if(!chosen)throw Error("Aucun flux audio compatible disponible.");
+    // Read the actual time just before switching, not before the network request.
+    const from=currentPlaybackPosition();
+    updatePosition(from,true);
     const audio=$("audioPlayer");
-    audio.src=chosen.url;audio.style.display="block";
-    audio.preload="auto";
+    audio.pause();audio.src=chosen.url;audio.style.display="block";audio.preload="auto";audio.load();
+    // loadedmetadata is needed before seeking on Safari/iPhone.
+    const seekAfterMetadata=()=>{
+      if(switchId!==playback.switching)return;
+      try{
+        const max=Number.isFinite(audio.duration)?Math.max(0,audio.duration-0.5):from;
+        audio.currentTime=Math.min(from,max);
+        updatePosition(audio.currentTime||from,true);
+      }catch{playback.seconds=from}
+    };
+    await new Promise((resolve,reject)=>{
+      if(audio.readyState>=1){seekAfterMetadata();resolve();return;}
+      const timer=setTimeout(()=>{cleanup();reject(Error("Le flux audio ne répond pas."))},12000);
+      function cleanup(){clearTimeout(timer);audio.removeEventListener("loadedmetadata",ready);audio.removeEventListener("error",broken)}
+      function ready(){cleanup();seekAfterMetadata();resolve()}
+      function broken(){cleanup();reject(Error("Flux audio indisponible sur cet appareil."))}
+      audio.addEventListener("loadedmetadata",ready,{once:true});
+      audio.addEventListener("error",broken,{once:true});
+    });
+    if(switchId!==playback.switching||state.playing?.id!==item.id)return;
+    // Switch only after the new player has found the same timestamp.
+    pauseYouTube();clearYouTubeIframe();
+    const video=$("videoPlayer");video.pause();video.style.display="none";
+    playback.mode="audio";playback.audioSrc=chosen.url;
+    prepareMediaSession(item);startProgressTracker();
     audio.onplay=()=>{syncMiniPlayer();if("mediaSession" in navigator)navigator.mediaSession.playbackState="playing"};
-    audio.onpause=()=>{syncMiniPlayer();if("mediaSession" in navigator)navigator.mediaSession.playbackState="paused"};
+    audio.onpause=()=>{updatePosition(audio.currentTime,true);syncMiniPlayer();if("mediaSession" in navigator)navigator.mediaSession.playbackState="paused"};
+    audio.ontimeupdate=()=>{updatePosition(audio.currentTime);updateMediaSessionPosition()};
     audio.onended=()=>{syncMiniPlayer();if("mediaSession" in navigator)navigator.mediaSession.playbackState="none"};
-    audio.onerror=()=>{playerMessage("Flux audio bloqué ou incompatible avec iOS. Essaie une autre vidéo.");syncMiniPlayer()};
-    $("videoPlayer").pause();
-    const embed=$("fallbackEmbed");embed.removeAttribute("src");embed.style.display="none";
-    prepareMediaSession(item);
-    $("miniPlayer").hidden=false;
-    syncMiniPlayer();
-    await audio.play().catch(()=>{playerMessage("Pour autoriser l'audio sur iPhone, appuie une fois sur ▶ dans le lecteur audio. La lecture peut ensuite rester active à l'écran verrouillé.")});
-  }catch(error){playerMessage("Lecture audio non disponible : "+error.message);}
-  finally{button.disabled=false;button.textContent="♫ Écouter en arrière-plan / écran verrouillé";}
+    audio.onerror=()=>{playerMessage("Le flux audio a été interrompu par le serveur.");syncMiniPlayer()};
+    syncMiniPlayer();syncPlayerButtons();
+    setPlaybackInfo("Audio synchronisé à "+time(from)+". Tu peux verrouiller l’écran si iOS autorise cette lecture.");
+    await audio.play().catch(()=>playerMessage("Sur iPhone, appuie sur ▶ dans le lecteur audio pour reprendre à "+time(from)+"."));
+  }catch(error){playerMessage("Impossible de passer à l’audio : "+error.message)}
+  finally{if(switchId===playback.switching){button.disabled=false;button.textContent="♫ Passer à l'audio · garder la position"}}
 }
-async function tryDirectPlayer(){
-  const it=state.playing;if(!it)return;
-  const btn=$("directPlayer");btn.disabled=true;btn.textContent="Chargement du flux direct…";
+function switchToVideo(){
+  const item=state.playing;if(!item)return;
+  playback.switching++;
+  const from=currentPlaybackPosition();
+  updatePosition(from,true);
+  $("audioPlayer").pause();$("audioPlayer").removeAttribute("src");$("audioPlayer").load();$("audioPlayer").style.display="none";
+  $("videoPlayer").pause();$("videoPlayer").removeAttribute("src");$("videoPlayer").load();$("videoPlayer").style.display="none";
+  $("miniPlayer").hidden=true;
+  showYouTubeVideo(from);
+  syncPlayerButtons();
+  setPlaybackInfo("Retour à la vidéo à "+time(from)+". La reprise automatique dépend des règles de lecture d’iOS.");
+}
+async function tryDirectPlayer({forPip=false}={}){
+  const item=state.playing;if(!item)return false;
+  const sw=++playback.switching;
+  const from=currentPlaybackPosition();
+  const btn=$("directPlayer");btn.disabled=true;btn.textContent="Chargement du lecteur natif…";
   try{
-    const data=await request("/streams/"+encodeURIComponent(it.id));
-    if(!state.playing||state.playing.id!==it.id)return;
-    const selected=(data.videoStreams||[]).filter(x=>!x.videoOnly&&x.url).sort((a,b)=>(b.height||0)-(a.height||0))[0];
-    const src=selected?.url||data.hls;
-    if(!src)throw Error("Aucun flux vidéo direct disponible.");
-    const player=$("videoPlayer");player.style.display="block";player.src=src;
-    player.onerror=()=>playerMessage("Flux vidéo incompatible avec Safari. Essaie le lecteur YouTube.");
-    $("fallbackEmbed").style.display="none";$("fallbackEmbed").removeAttribute("src");
-    await player.play().catch(()=>{playerMessage("Appuie sur ▶ dans le lecteur vidéo pour démarrer.");});
-  }catch(e){playerMessage(e.message);}
-  finally{btn.disabled=false;btn.textContent="Essayer la lecture directe";}
+    const data=await request("/streams/"+encodeURIComponent(item.id));
+    if(sw!==playback.switching||state.playing?.id!==item.id)return false;
+    const streams=(data.videoStreams||[]).filter(x=>!x.videoOnly&&x.url).sort((a,b)=>(b.height||0)-(a.height||0));
+    const src=streams[0]?.url||data.hls;
+    if(!src)throw Error("Pas de flux vidéo natif disponible pour cette vidéo.");
+    const native=$("videoPlayer");
+    native.pause();native.src=src;native.style.display="block";
+    native.onplay=()=>{playback.mode="native";syncPlayerButtons()};
+    native.ontimeupdate=()=>updatePosition(native.currentTime);
+    native.onerror=()=>{playerMessage("Le flux vidéo natif n’est pas compatible avec Safari. Reviens à la vidéo YouTube.");setPlaybackInfo("Flux natif indisponible sur cet iPhone.")};
+    native.load();
+    await new Promise((resolve,reject)=>{
+      if(native.readyState>=1){resolve();return}
+      const timer=setTimeout(()=>{cleanup();reject(Error("Le flux vidéo ne charge pas."))},11000);
+      function cleanup(){clearTimeout(timer);native.removeEventListener("loadedmetadata",ready);native.removeEventListener("error",broken)}
+      function ready(){cleanup();resolve()}
+      function broken(){cleanup();reject(Error("Vidéo native non lisible."))}
+      native.addEventListener("loadedmetadata",ready,{once:true});native.addEventListener("error",broken,{once:true});
+    });
+    if(sw!==playback.switching)return false;
+    try{native.currentTime=Number.isFinite(native.duration)?Math.min(from,Math.max(0,native.duration-0.4)):from}catch{}
+    updatePosition(from,true);
+    $("audioPlayer").pause();$("audioPlayer").removeAttribute("src");$("audioPlayer").load();$("audioPlayer").style.display="none";
+    pauseYouTube();clearYouTubeIframe();
+    playback.mode="native";startProgressTracker();syncPlayerButtons();
+    $("miniPlayer").hidden=true;
+    setPlaybackInfo("Vidéo native synchronisée à "+time(from)+". Le mode PiP dépend de la prise en charge par iOS.");
+    native.play().catch(()=>playerMessage("Appuie sur ▶ dans la vidéo pour lancer la lecture."));
+    if(forPip)setPlaybackInfo("Lecteur natif prêt. Appuie à nouveau sur le bouton PiP pour ouvrir la fenêtre flottante.");
+    return true;
+  }catch(error){
+    playerMessage(error.message+" Le lecteur YouTube reste disponible.");
+    return false;
+  }finally{btn.disabled=false;btn.textContent="Essayer la lecture vidéo native"}
+}
+async function togglePictureInPicture(){
+  const video=$("videoPlayer");
+  // iOS requires direct user activation for PiP; preparing a stream first
+  // then requiring a second click respects this requirement.
+  if(playback.mode!=="native"||video.readyState<1){await tryDirectPlayer({forPip:true});return;}
+  try{
+    if(typeof video.webkitSupportsPresentationMode==="function" &&
+       !video.webkitSupportsPresentationMode("picture-in-picture")){
+      setPlaybackInfo("PiP indisponible dans cette Web App installée sur iOS. Essaie la même vidéo dans Safari ; Apple limite le PiP des PWA.");
+      return;
+    }
+    if(typeof video.webkitSetPresentationMode==="function"){
+      video.webkitSetPresentationMode(video.webkitPresentationMode==="picture-in-picture"?"inline":"picture-in-picture");
+    }else if(typeof video.requestPictureInPicture==="function"){
+      await video.requestPictureInPicture();
+    }else{
+      setPlaybackInfo("Le Picture-in-Picture n’est pas disponible dans ce navigateur. Essaie Safari.");
+    }
+  }catch(error){setPlaybackInfo("PiP refusé par iOS ("+error.name+"). Ouvre JabouTube dans Safari pour essayer.")}
 }
 function settingsHtml(){return '<div class="settings">'+
 '<h2>Compte Google</h2><p class="muted">Connecte-toi depuis l’onglet Compte pour accéder aux playlists et abonnements lorsque l’authentification Google sera configurée.</p><button class="primary" data-tab="account">Ouvrir le compte</button>'+
@@ -321,12 +528,15 @@ $("searchForm").onsubmit=e=>{e.preventDefault();search($("searchInput").value)};
 $("settingsTop").onclick=()=>setTab("settings");
 $("accountBtn").onclick=()=>setTab("account");
 $("directPlayer").onclick=()=>tryDirectPlayer();
+$("switchVideo").onclick=()=>switchToVideo();
+$("pipButton").onclick=()=>togglePictureInPicture();
 $("closePlayer").onclick=()=>{
   $("playerOverlay").classList.remove("open");
   if(!$("audioPlayer").src)stopPlayers();
   else syncMiniPlayer();
 };
 $("backgroundAudio").onclick=()=>startBackgroundAudio();
+$("videoPlayer").addEventListener("timeupdate",()=>{if(playback.mode==="native")updatePosition($("videoPlayer").currentTime)});
 $("miniToggle").onclick=()=>{const a=$("audioPlayer");if(a.paused)a.play().catch(e=>status(e.message));else a.pause()};
 $("miniOpen").onclick=()=>{$("playerOverlay").classList.add("open")};
 $("miniStop").onclick=()=>stopPlayers();
@@ -340,6 +550,7 @@ $("mobileSearchForm").onsubmit=e=>{
 };
 $("audioPlayer").addEventListener("play",syncMiniPlayer);
 $("audioPlayer").addEventListener("pause",syncMiniPlayer);
+window.addEventListener("pagehide",()=>updatePosition(currentPlaybackPosition(),true));
 function showSearchSheet(){
  $("searchShade").hidden=false;
  $("mobileSearchInput").value=$("searchInput").value;
