@@ -10,7 +10,11 @@
     const last=normalize(name.split("/").pop()||"");
     if(!/\.(json|html?)$/.test(last))return false;
     if(/search|recherch|comment|likes|abonn/.test(last))return false;
-    return /watch[-_ ]?history|historique.*(video|visionnage|regard)|historique[-_ ]?des[-_ ]?visionnag|video[-_ ]?history/.test(last);
+    const regular=/watch[-_ ]?history|historique.*(video|visionnage|regard)|historique[-_ ]?des[-_ ]?visionnag|video[-_ ]?history/.test(last);
+    // Data Portability exports YouTube activity under My Activity/YouTube/MyActivity.json.
+    const portability=/myactivity|mon activite|my[-_ ]?activity/.test(last)
+      &&/youtube|you tube/.test(normalize(name));
+    return regular||portability;
   }
   function idFromUrl(input){
     try{
@@ -73,8 +77,20 @@
     if(approxSize>MAX_HISTORY_BYTES)throw Error("L’historique contenu dans ce ZIP dépasse 75 Mo. Crée un export ciblé sur l’historique.");
     const content=await selected.async("string");
     if(content.length>MAX_HISTORY_BYTES)throw Error("Historique trop volumineux (75 Mo maximum).");
-    const data=/\.json$/i.test(selected.name)?JSON.parse(content):parseHtml(content);
+    let data=/\.json$/i.test(selected.name)?JSON.parse(content):parseHtml(content);
     if(!Array.isArray(data)&&!Array.isArray(data?.history))throw Error("Fichier d’historique absent ou invalide dans l’archive.");
+    if(/myactivity|mon activite|my[-_ ]?activity/i.test(selected.name)){
+      const list=Array.isArray(data)?data:data.history;
+      // Data Portability contains searches/ads as well as actual viewing.
+      // Import YouTube WATCH activity only, never non-viewing actions.
+      data=list.filter(x=>{
+        const title=normalize(x?.title||"");
+        const controls=normalize((x?.activityControls||[]).join(" "));
+        return !!idFromUrl(x?.titleUrl)
+          &&(/^(watched|vous avez regarde|regarde|visionne)/.test(title)
+              ||/youtube watch history|historique des videos regardees/.test(controls));
+      });
+    }
     return {data,source:"zip",fileName:selected.name};
   }
   window.JabouImport={parseFile};
