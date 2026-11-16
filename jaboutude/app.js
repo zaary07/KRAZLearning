@@ -224,7 +224,7 @@ function showYouTubeVideo(startSeconds=0){
       (seconds?"&start="+seconds:"");
   iframe.src=url;
   playback.mode="embed";updatePosition(seconds,true);startProgressTracker();
-  setPlaybackInfo("Vidéo à "+time(seconds)+". Appuie sur ▶ si le navigateur ne lance pas automatiquement.");
+  setPlaybackInfo("Vidéo à "+time(seconds)+". Pour écouter écran verrouillé, utilise « Continuer dans YouTube » (Premium selon l’offre).");
   loadIframeAPI().then(()=>{
     if(playback.ytInstance!==token||playback.mode!=="embed"||state.playing?.id!==item.id)return;
     try{
@@ -324,11 +324,9 @@ async function openVideo(item){
   $("playerError").style.display="none";
   $("playerOverlay").classList.add("open");
   syncPlayerButtons();
-  if(state.music){
-    playback.mode="audio";
-    $("backgroundAudio").textContent="♫ Lecture audio (écran verrouillé)";
-    startBackgroundAudio().catch(e=>playerMessage(e.message));
-  }else showYouTubeVideo(playback.seconds);
+  // Use the official embedded player for YouTube videos, including the Music tab.
+  // Extracted third-party audio streams are unreliable and cannot guarantee lock-screen play.
+  showYouTubeVideo(playback.seconds);
   status("Lecteur ouvert");
 }
 async function startBackgroundAudio(){
@@ -658,7 +656,12 @@ $("shareCurrent").onclick=async()=>{
   if(navigator.share)try{await navigator.share({title:state.playing.title,url});return}catch{}
   navigator.clipboard?.writeText(url).then(()=>status("Lien copié")).catch(()=>prompt("Lien :",url));
 };
-$("openOriginal").onclick=()=>{if(state.playing)window.open("https://www.youtube.com/watch?v="+state.playing.id,"_blank","noopener")};
+$("openOriginal").onclick=()=>{
+  if(!state.playing)return;
+  const seconds=Math.max(0,Math.floor(currentPlaybackPosition()));
+  const url="https://www.youtube.com/watch?v="+encodeURIComponent(state.playing.id)+(seconds?"&t="+seconds+"s":"");
+  window.open(url,"_blank","noopener,noreferrer");
+};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("playerOverlay").classList.contains("open")){$("closePlayer").click()}});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 window.JabouAuth?.subscribe(a=>{
