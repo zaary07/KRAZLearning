@@ -9,14 +9,7 @@
   "theme_color": "#050915",
   "icons": [
     {
-      "src": "./jaboutube-icon-192.webp",
-      "sizes": "192x192",
-      "type": "image/webp",
-      "purpose": "any"
-    },
-    {
-      "src": "./jaboutube-icon-512.webp",
-      "sizes": "512x512",
+      "src": "./jaboutude-icon.webp",
       "type": "image/webp",
       "purpose": "any"
     }
