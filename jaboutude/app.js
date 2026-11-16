@@ -80,14 +80,34 @@ function feedProfileKey(){
   const auth=window.JabouAuth?.state;
   return [
     activeMemberKey||"",
-    state.history.length,state.history[0]?.id||"",state.history[0]?.watchedAt||"",
-    state.favorites.length,
+    Math.floor(state.history.length/8),Math.floor(state.favorites.length/3),
     (auth?.subscriptions||[]).length,
     auth?.youtubeConnected?"yt":"local"
   ].join(":");
 }
 function stopFeedObserver(){
   if(feedState.observer){feedState.observer.disconnect();feedState.observer=null;}
+}
+function homeCacheKey(){return "jaboutube.feed.cache.v1."+String(activeMemberKey||"legacy")}
+function restoreFeedCache(key,topic){
+  try{
+    const data=JSON.parse(sessionStorage.getItem(homeCacheKey())||"null");
+    if(!data||data.key!==key||data.topic!==topic||Date.now()-data.savedAt>20*60*1000)return false;
+    if(!Array.isArray(data.items)||data.items.length>520)return false;
+    feedState.items=data.items.filter(x=>x&&/^[-\w]{11}$/.test(x.id));
+    feedState.seen=new Set(feedState.items.map(x=>x.id));
+    feedState.queryCursor=Math.max(0,Math.min(70,Number(data.cursor)||0));
+    feedState.pages=new Map(Array.isArray(data.pages)?data.pages:[]);
+    feedState.requested=Math.max(0,Math.min(70,Number(data.requested)||0));
+    feedState.more=data.more!==false;return true;
+  }catch{return false}
+}
+function saveFeedCache(){
+  try{sessionStorage.setItem(homeCacheKey(),JSON.stringify({
+    key:feedState.profileKey,topic:feedState.topic,savedAt:Date.now(),
+    items:feedState.items,cursor:feedState.queryCursor,pages:[...feedState.pages],
+    requested:feedState.requested,more:feedState.more
+  }))}catch{}
 }
 function startPersonalizedHome(topic=""){
   stopFeedObserver();
@@ -99,9 +119,10 @@ function startPersonalizedHome(topic=""){
   feedState.profileKey=feedProfileKey();
   feedState.profile=window.JabouFeed.buildProfile(
     state.history,state.favorites,window.JabouAuth?.state?.subscriptions||[]);
+  const recovered=restoreFeedCache(feedState.profileKey,feedState.topic);
   if(state.tab==="home"&&!familyLocked()){
     renderHome();
-    loadMoreFeed();
+    if(!recovered||!feedState.items.length)loadMoreFeed();
   }
 }
 function renderHome(){
@@ -205,6 +226,7 @@ async function loadMoreFeed(){
   if(!loaded&&feedState.queryCursor>=queries.length*3)feedState.more=false;
   if(feedState.items.length>=520||feedState.queryCursor>=70)feedState.more=false;
   status(loaded?feedState.items.length+" recommandations dans ton fil.":"Recherche de recommandations temporairement limitée.");
+  saveFeedCache();
   renderHome();
 }
 function loadTrending(){return startPersonalizedHome()}
