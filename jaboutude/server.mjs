@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 10000);
@@ -17,8 +17,62 @@ const HOSTS = [
 const GOOGLE_CLIENT_ID=String(process.env.GOOGLE_CLIENT_ID||'').trim();
 const FAMILY_EMAILS=new Set(String(process.env.JABOUTUBE_ALLOWED_EMAILS||'')
   .split(',').map(x=>x.trim().toLowerCase()).filter(x=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)));
+const INVITE_SECRET=String(process.env.JABOUTUBE_INVITE_SECRET||'');
+const ADMIN_KEY=String(process.env.JABOUTUBE_ADMIN_KEY||'');
+const INVITE_ONLY=!!INVITE_SECRET;
+const INVITE_READY=INVITE_ONLY&&INVITE_SECRET.length>=32&&ADMIN_KEY.length>=24;
 const FAMILY_ONLY=FAMILY_EMAILS.size>0;
 const FAMILY_READY=FAMILY_ONLY&&/^[0-9]+-[a-z0-9-]+\.apps\.googleusercontent\.com$/.test(GOOGLE_CLIENT_ID);
+
+const encodePart=object=>Buffer.from(JSON.stringify(object)).toString('base64url');
+function signFamily(payload){
+ const body=encodePart(payload),signature=createHmac('sha256',INVITE_SECRET).update(body).digest('base64url');
+ return body+'.'+signature;
+}
+function verifyFamily(token,scope){
+ if(!INVITE_READY||typeof token!=='string'||token.length>2500||!token.includes('.'))return null;
+ const [body,signature,...excess]=token.split('.');
+ if(excess.length||!body||!signature)return null;
+ const expected=createHmac('sha256',INVITE_SECRET).update(body).digest();
+ let provided;
+ try{provided=Buffer.from(signature,'base64url')}catch{return null}
+ if(provided.length!==expected.length||!timingSafeEqual(provided,expected))return null;
+ try{
+  const data=JSON.parse(Buffer.from(body,'base64url').toString('utf8'));
+  if(data.type!==scope||typeof data.uid!=='string'||!/^[-0-9a-f]{36}$/.test(data.uid))return null;
+  if(!Number.isFinite(data.exp)||data.exp<=Math.floor(Date.now()/1000))return null;
+  if(!['string'].includes(typeof data.name)||data.name.length>80)return null;
+  return data;
+ }catch{return null}
+}
+function safeAdminKey(value){
+ const a=Buffer.from(String(value||'')),b=Buffer.from(ADMIN_KEY);
+ return INVITE_READY&&a.length===b.length&&timingSafeEqual(a,b);
+}
+function readBody(req,maxBytes=4096){
+ return new Promise((resolve,reject)=>{
+  let buf='',size=0,closed=false;
+  req.on('data',chunk=>{
+   if(closed)return;
+   size+=chunk.length;
+   if(size>maxBytes){closed=true;reject(Error('Requête trop volumineuse'));req.destroy();return;}
+   buf+=chunk.toString('utf8');
+  });
+  req.on('end',()=>{
+   if(closed)return;
+   try{resolve(JSON.parse(buf||'{}'))}catch{reject(Error('Données JSON invalides'))}
+  });
+  req.on('error',reject);
+ });
+}
+function inviteIdentity(req){
+ const bearer=String(req.headers.authorization||'');
+ if(!bearer.startsWith('Bearer '))return null;
+ const data=verifyFamily(bearer.slice(7).trim(),'session');
+ if(!data)return null;
+ return {sub:data.uid,name:data.name,role:'member'};
+}
+
 const authCache=new Map();
 async function privateIdentity(req){
   if(!FAMILY_READY)return null;
@@ -109,8 +163,26 @@ http.createServer(async(req,res)=>{
  try{
   const u=new URL(req.url||'/', 'http://localhost');
   if(req.method==='OPTIONS'){
-    res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET, OPTIONS','access-control-allow-headers':'Authorization, Content-Type','access-control-max-age':'600'});
+    res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET, POST, OPTIONS','access-control-allow-headers':'Authorization, Content-Type, X-Admin-Key','access-control-max-age':'600'});
     return res.end();
+  }
+  if(u.pathname==='/api/family/invite'&&req.method==='POST'){
+    if(!INVITE_READY)return json(res,503,{error:'Invitations non configurées par le propriétaire.'});
+    if(!safeAdminKey(req.headers['x-admin-key']))return json(res,403,{error:'Clé administrateur incorrecte.'});
+    const data=await readBody(req),name=String(data.name||'').trim().slice(0,60);
+    if(name.length<2||name.length>60)return json(res,400,{error:'Indique un prénom ou surnom de 2 à 60 caractères.'});
+    const now=Math.floor(Date.now()/1000);
+    const token=signFamily({type:'invite',uid:randomUUID(),name,exp:now+14*86400});
+    const publicOrigin=String(process.env.JABOUTUBE_PUBLIC_URL||'https://jaboutude-server.onrender.com').replace(/\/$/,'');
+    return json(res,200,{name,inviteUrl:publicOrigin+'/#invite='+token,expiresAt:new Date((now+14*86400)*1000).toISOString(),reusable:true});
+  }
+  if(u.pathname==='/api/family/claim'&&req.method==='POST'){
+    if(!INVITE_READY)return json(res,503,{error:'Accès familial non configuré.'});
+    const data=await readBody(req),invite=verifyFamily(data.invite,'invite');
+    if(!invite)return json(res,401,{error:'Invitation invalide ou expirée. Demande un nouveau lien.'});
+    const now=Math.floor(Date.now()/1000);
+    const session=signFamily({type:'session',uid:invite.uid,name:invite.name,exp:now+365*86400});
+    return json(res,200,{session,profile:{sub:invite.uid,name:invite.name,role:'member'},expiresAt:new Date((now+365*86400)*1000).toISOString()});
   }
   if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
   const BRAND_URLS={"/jaboutube-logo.webp":"https://d2ol7oe51mr4n9.cloudfront.net/user_3JeODywvzeYkVfZneh5sFrXTvjJ/ec37d0e7-b937-4616-8997-186789e01464.webp","/jaboutube-icon-512.webp":"https://d2ol7oe51mr4n9.cloudfront.net/user_3JeODywvzeYkVfZneh5sFrXTvjJ/936377bb-0327-468d-8048-74fe72b54937.webp","/jaboutube-icon-192.webp":"https://d2ol7oe51mr4n9.cloudfront.net/user_3JeODywvzeYkVfZneh5sFrXTvjJ/b35e64f9-d3e0-4b23-90a7-ba0817d9a95b.webp","/jaboutube-apple-touch-icon.png":"https://d2ol7oe51mr4n9.cloudfront.net/user_3JeODywvzeYkVfZneh5sFrXTvjJ/bdd64c46-a8ce-4716-bcbc-e3444caf08fd.png"};
@@ -130,11 +202,16 @@ http.createServer(async(req,res)=>{
     }finally{clearTimeout(deadline);}
   }
   if(u.pathname==='/api/config'){
-    return json(res,200,{googleConfigured:/^[0-9]+-[a-z0-9-]+\.apps\.googleusercontent\.com$/.test(GOOGLE_CLIENT_ID),googleClientId:GOOGLE_CLIENT_ID,familyOnly:FAMILY_ONLY,familyReady:FAMILY_READY});
+    return json(res,200,{googleConfigured:/^[0-9]+-[a-z0-9-]+\.apps\.googleusercontent\.com$/.test(GOOGLE_CLIENT_ID),googleClientId:GOOGLE_CLIENT_ID,familyOnly:INVITE_ONLY||FAMILY_ONLY,familyReady:INVITE_ONLY?INVITE_READY:FAMILY_READY,inviteOnly:INVITE_ONLY});
   }
-  if(u.pathname==='/api/health')return json(res,200,{ok:true,source:'Invidious public instances',historySync:false,server:'JabouTube',familyOnly:FAMILY_ONLY});
+  if(u.pathname==='/api/health')return json(res,200,{ok:true,source:'Invidious public instances',historySync:false,server:'JabouTube',familyOnly:INVITE_ONLY||FAMILY_ONLY,inviteOnly:INVITE_ONLY});
   if(u.pathname==='/api/me'||u.pathname==='/api/trending'||u.pathname==='/api/search'||u.pathname.startsWith('/api/streams/')){
-    if(FAMILY_ONLY){
+    if(INVITE_ONLY){
+      if(!INVITE_READY)return json(res,503,{error:'Accès familial non configuré.'});
+      const identity=inviteIdentity(req);
+      if(!identity)return json(res,401,{error:'Invitation familiale nécessaire ou session expirée.'});
+      if(u.pathname==='/api/me')return json(res,200,{user:identity});
+    }else if(FAMILY_ONLY){
       if(!FAMILY_READY)return json(res,503,{error:'Accès familial non configuré : GOOGLE_CLIENT_ID manquant ou invalide.'});
       const identity=await privateIdentity(req);
       if(!identity)return json(res,401,{error:'Compte non autorisé. Connecte-toi avec une adresse Google invitée par la famille.'});
