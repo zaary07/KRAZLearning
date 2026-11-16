@@ -153,6 +153,7 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
   .home-recent .title{font-size:12px}
   .feed-chips{margin:0 -15px;padding-left:15px;padding-right:15px}
 }
+@media(max-width:750px){.watchtop{gap:8px}.watchtop .brand{padding:0;font-size:14px}.watchtop .actions{gap:6px;justify-content:flex-end}.watchtop .secondary{font-size:12px;padding:9px 9px}.takeout-setup{padding:14px;margin:20px 0;background:#18232f;border-radius:13px;border:1px solid #384455}.takeout-setup .actions{margin-top:12px}.takeout-setup p{font-size:13px;margin:8px 0}.home-feed .notice .secondary{margin-top:10px}}
 </style>
 </head>
 <body>
@@ -193,7 +194,7 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 </div>
 <div class="playerbackdrop" id="playerOverlay" role="dialog" aria-label="Lecteur vidéo">
 <div class="playerpanel">
-<div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><button class="secondary" id="closePlayer">↓ Réduire</button></div>
+<div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><div class="actions"><button class="secondary" id="lockAudio" type="button" title="Ouvrir la vidéo dans YouTube pour la lecture avec écran verrouillé lorsque Premium le permet">♫ Écran éteint · YouTube</button><button class="secondary" id="closePlayer">↓ Réduire</button></div></div>
 <video id="videoPlayer" controls playsinline webkit-playsinline preload="metadata" style="display:none" aria-label="Vidéo avec lecture Picture-in-Picture lorsque prise en charge"></video>
 <iframe id="fallbackEmbed" title="Lecteur YouTube de secours" style="display:none;width:100%;aspect-ratio:16/9;border:0;border-radius:14px;margin:12px 0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 <audio id="audioPlayer" controls playsinline preload="metadata" style="display:none"></audio>
@@ -209,6 +210,9 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 <div class="playback-info" id="playbackInfo" role="status">Tu peux regarder ici, ou continuer à la même position dans l’application YouTube.</div>
 <button class="primary" id="openOriginal">▶ Continuer dans YouTube (écran verrouillé avec Premium)</button>
 </div></div>
+<input type="file" id="globalHistoryFile" accept=".zip,.json,.html,application/zip,application/json,text/html" hidden aria-label="Choisir un export Google Takeout ou un historique JabouTube">
+<script src="./vendor/jszip.min.js" defer></script>
+<script src="./import.js" defer></script>
 <script src="./auth.js" defer></script>
 <script src="./recommendations.js" defer></script>
 <script src="./app.js" defer></script>
