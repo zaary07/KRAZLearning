@@ -50,7 +50,7 @@ async function privateIdentity(req){
 const cache = new Map();
 const inFlight = new Map();
 const hostCooldown = new Map();
-const json = (res,status,payload)=>{const b=JSON.stringify(payload);res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','access-control-allow-origin':'*'});res.end(b);};
+const json = (res,status,payload)=>{const b=JSON.stringify(payload);res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','access-control-allow-origin':'*','access-control-allow-methods':'GET, OPTIONS','access-control-allow-headers':'Authorization, Content-Type','vary':'Origin, Authorization'});res.end(b);};
 const safeId = v => /^[a-zA-Z0-9_-]{11}$/.test(v);
 const norm = v => {
  const id=String(v.videoId||'');
@@ -108,6 +108,10 @@ const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=u
 http.createServer(async(req,res)=>{
  try{
   const u=new URL(req.url||'/', 'http://localhost');
+  if(req.method==='OPTIONS'){
+    res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET, OPTIONS','access-control-allow-headers':'Authorization, Content-Type','access-control-max-age':'600'});
+    return res.end();
+  }
   if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
   const BRAND_URLS={"/jaboutube-logo.webp":"https://d2ol7oe51mr4n9.cloudfront.net/user_3JeODywvzeYkVfZneh5sFrXTvjJ/ec37d0e7-b937-4616-8997-186789e01464.webp","/jaboutube-icon-512.webp":"https://d2ol7oe51mr4n9.cloudfront.net/user_3JeODywvzeYkVfZneh5sFrXTvjJ/936377bb-0327-468d-8048-74fe72b54937.webp","/jaboutube-icon-192.webp":"https://d2ol7oe51mr4n9.cloudfront.net/user_3JeODywvzeYkVfZneh5sFrXTvjJ/b35e64f9-d3e0-4b23-90a7-ba0817d9a95b.webp","/jaboutube-apple-touch-icon.png":"https://d2ol7oe51mr4n9.cloudfront.net/user_3JeODywvzeYkVfZneh5sFrXTvjJ/bdd64c46-a8ce-4716-bcbc-e3444caf08fd.png"};
   if(Object.prototype.hasOwnProperty.call(BRAND_URLS,u.pathname)){
