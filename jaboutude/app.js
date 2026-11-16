@@ -901,13 +901,29 @@ $("shareCurrent").onclick=async()=>{
   if(navigator.share)try{await navigator.share({title:state.playing.title,url});return}catch{}
   navigator.clipboard?.writeText(url).then(()=>status("Lien copié")).catch(()=>prompt("Lien :",url));
 };
-$("lockAudio").onclick=()=>{$("openOriginal").click()};
-$("openOriginal").onclick=()=>{
+function continueInOfficialYoutube(){
   if(!state.playing)return;
   const seconds=Math.max(0,Math.floor(currentPlaybackPosition()));
-  const url="https://www.youtube.com/watch?v="+encodeURIComponent(state.playing.id)+(seconds?"&t="+seconds+"s":"");
-  window.open(url,"_blank","noopener,noreferrer");
-};
+  const id=encodeURIComponent(state.playing.id);
+  const link="https://www.youtube.com/watch?v="+id+(seconds?"&t="+seconds+"s":"");
+  const android=/Android/i.test(navigator.userAgent||"");
+  const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent||"");
+  if(android){
+    // Android Chrome resolves the intent to the real YouTube application.
+    // If it is absent, it opens the original HTTPS URL instead.
+    const intent="intent://www.youtube.com/watch?v="+id+(seconds?"&t="+seconds+"s":"")+
+      "#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url="+
+      encodeURIComponent(link)+";end";
+    window.location.href=intent;
+  }else if(ios){
+    // Safari's universal link may open the official YouTube application.
+    window.location.href=link;
+  }else{
+    window.open(link,"_blank","noopener,noreferrer");
+  }
+}
+$("lockAudio").onclick=continueInOfficialYoutube;
+$("openOriginal").onclick=continueInOfficialYoutube;
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("playerOverlay").classList.contains("open")){$("closePlayer").click()}});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 window.JabouAuth?.subscribe(a=>{
