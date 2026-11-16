@@ -230,13 +230,14 @@ http.createServer(async(req,res)=>{
   if(u.pathname==='/api/search'){
     const q=(u.searchParams.get('q')||'').trim().slice(0,140);
     if(q.length<2)return json(res,400,{error:'Entre au moins deux caractères.'});
-    const key='search:'+q.toLowerCase();
+    const page=Math.max(1,Math.min(30,Number.parseInt(u.searchParams.get('page')||'1',10)||1));
+    const key='search:'+q.toLowerCase()+':page:'+page;
     const items=await getCached(key,120000,async()=>{
-      const p='/api/v1/search?q='+encodeURIComponent(q)+'&type=video&sort_by=relevance';
+      const p='/api/v1/search?q='+encodeURIComponent(q)+'&type=video&sort_by=relevance&page='+page;
       const r=await upstream(p,x=>Array.isArray(x)&&x.length>0);
       return r.value.map(norm).filter(Boolean);
     });
-    return json(res,200,{items});
+    return json(res,200,{items,page});
   }
   if(u.pathname.startsWith('/api/streams/')){
    const id=u.pathname.slice('/api/streams/'.length);
