@@ -394,7 +394,7 @@ function showYouTubeVideo(startSeconds=0){
       (seconds?"&start="+seconds:"");
   iframe.src=url;
   playback.mode="embed";updatePosition(seconds,true);startProgressTracker();
-  setPlaybackInfo("Vidéo à "+time(seconds)+". Pour écouter écran verrouillé, utilise « Continuer dans YouTube » (Premium selon l’offre).");
+  setPlaybackInfo("Vidéo à "+time(seconds)+". Pour essayer le mode audio PWA, touche « Passer en audio » avant de verrouiller l’écran.");
   loadIframeAPI().then(()=>{
     if(playback.ytInstance!==token||playback.mode!=="embed"||state.playing?.id!==item.id)return;
     try{
@@ -446,7 +446,8 @@ function stopPlayers(){
   playback.mode="none";playback.audioSrc="";
   $("miniPlayer").hidden=true;
   $("backgroundAudio").disabled=false;
-  $("backgroundAudio").textContent="♫ Passer à l'audio · garder la position";
+  $("backgroundAudio").textContent="♫ Passer en audio · garder la position";
+  $("lockAudio").textContent="♫ Passer en audio";
   if("mediaSession" in navigator)navigator.mediaSession.playbackState="none";
 }
 function playerMessage(msg){$("playerError").style.display="block";$("playerError").textContent=msg;}
@@ -500,64 +501,119 @@ async function openVideo(item){
   status("Lecteur ouvert");
 }
 async function startBackgroundAudio(){
-  const item=state.playing;if(!item)return;
-  if(playback.mode==="audio" && $("audioPlayer").src){
-    $("audioPlayer").play().catch(()=>playerMessage("Appuie sur ▶ pour lancer l’audio."));
+  const item=state.playing;
+  if(!item)return;
+  const audio=$("audioPlayer");
+  if(playback.mode==="audio" && audio.src){
+    audio.play().catch(()=>setPlaybackInfo("Appuie sur ▶ dans les commandes audio pour continuer."));
     return;
   }
   const switchId=++playback.switching;
-  const button=$("backgroundAudio");button.disabled=true;button.textContent="Synchronisation de l'audio…";
+  const mainButton=$("backgroundAudio"),headerButton=$("lockAudio");
+  for(const button of [mainButton,headerButton])button.disabled=true;
+  mainButton.textContent="♫ Préparation de l’audio…";
+  headerButton.textContent="♫ Préparation…";
+  $("playerError").style.display="none";
+  setPlaybackInfo("Recherche d’une piste audio compatible. La vidéo continue pendant le chargement…");
+  let swapped=false;
   try{
+    // A standalone audio source is required; the YouTube iframe does not
+    // expose audio capture. Never re-encode in the browser.
     const data=await request("/streams/"+encodeURIComponent(item.id));
     if(switchId!==playback.switching||state.playing?.id!==item.id)return;
-    // iOS compatibility: prefer AAC-LC (mp4a.40.2) over HE-AAC (mp4a.40.5).
-    // URLs are resolved through Invidious local=true to avoid Googlevideo 403.
-    const audioChoices=(data.audioStreams||[]).filter(x=>x.url&&/audio\/mp4/i.test(x.format||""))
-      .sort((a,b)=>{
-        const compat=x=>/mp4a\.40\.2/.test(x.format||"")?0:1;
-        return compat(a)-compat(b)||Math.abs((a.bitrate||128000)-128000)-Math.abs((b.bitrate||128000)-128000);
-      });
-    const chosen=audioChoices[0]||(data.audioStreams||[]).find(x=>x.url);
-    if(!chosen)throw Error("Aucun flux audio compatible disponible.");
-    // Read the actual time just before switching, not before the network request.
+    const choices=(data.audioStreams||[]).filter(stream=>{
+      if(!stream?.url)return false;
+      try{return new URL(stream.url).protocol==="https:"}catch{return false}
+    }).sort((a,b)=>{
+      const rank=entry=>{
+        const fmt=String(entry.format||"").toLowerCase();
+        const supported=typeof audio.canPlayType==="function"?audio.canPlayType(fmt):"";
+        const formatScore=/mp4a\.40\.2/.test(fmt)?2000:/audio\/mp4/.test(fmt)?1600:
+          /audio\/mpeg/.test(fmt)?1200:/audio\/webm/.test(fmt)?800:100;
+        return (supported==="probably"?500:supported==="maybe"?250:0)+formatScore-
+          Math.abs((Number(entry.bitrate)||128000)-128000)/1000;
+      };
+      return rank(b)-rank(a);
+    });
+    const chosen=choices[0];
+    if(!chosen)throw Error("Aucune piste audio compatible n’a été fournie pour cette vidéo.");
+    // Capture the playback position AFTER the asynchronous network call,
+    // so playback continues from when the user actually switches.
     const from=currentPlaybackPosition();
     updatePosition(from,true);
-    const audio=$("audioPlayer");
-    audio.pause();audio.src=chosen.url;audio.style.display="block";audio.preload="auto";audio.load();
-    // loadedmetadata is needed before seeking on Safari/iPhone.
-    const seekAfterMetadata=()=>{
-      if(switchId!==playback.switching)return;
-      try{
-        const max=Number.isFinite(audio.duration)?Math.max(0,audio.duration-0.5):from;
-        audio.currentTime=Math.min(from,max);
-        updatePosition(audio.currentTime||from,true);
-      }catch{playback.seconds=from}
-    };
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.src=chosen.url;
+    audio.style.display="block";
+    audio.preload="auto";
+    audio.load();
     await new Promise((resolve,reject)=>{
-      if(audio.readyState>=1){seekAfterMetadata();resolve();return;}
-      const timer=setTimeout(()=>{cleanup();reject(Error("Le flux audio met trop de temps à répondre. Réessaie ou sélectionne une autre vidéo."))},22000);
-      function cleanup(){clearTimeout(timer);audio.removeEventListener("loadedmetadata",ready);audio.removeEventListener("error",broken)}
-      function ready(){cleanup();seekAfterMetadata();resolve()}
-      function broken(){cleanup();reject(Error("Flux audio indisponible sur cet appareil."))}
+      if(audio.readyState>=1){resolve();return;}
+      const timer=setTimeout(()=>{cleanup();reject(Error("La piste audio ne répond pas (délai dépassé)."))},18000);
+      const cleanup=()=>{
+        clearTimeout(timer);
+        audio.removeEventListener("loadedmetadata",ready);
+        audio.removeEventListener("error",broken);
+      };
+      function ready(){cleanup();resolve()}
+      function broken(){cleanup();reject(Error("Ce flux audio est bloqué ou illisible sur cet appareil."))}
       audio.addEventListener("loadedmetadata",ready,{once:true});
       audio.addEventListener("error",broken,{once:true});
     });
     if(switchId!==playback.switching||state.playing?.id!==item.id)return;
-    // Switch only after the new player has found the same timestamp.
+    const lastPosition=Math.max(0,from);
+    if(lastPosition>0){
+      try{
+        const duration=Number.isFinite(audio.duration)&&audio.duration>0?audio.duration:Infinity;
+        audio.currentTime=Math.max(0,Math.min(lastPosition,duration===Infinity?lastPosition:Math.max(0,duration-0.25)));
+      }catch{ /* Some streams only permit seeking after canplay. */ }
+    }
+    // The standalone audio element is now loaded at the original position.
     pauseYouTube();clearYouTubeIframe();
-    const video=$("videoPlayer");video.pause();video.style.display="none";
+    const video=$("videoPlayer");
+    video.pause();video.style.display="none";
     playback.mode="audio";playback.audioSrc=chosen.url;
-    prepareMediaSession(item);startProgressTracker();
-    audio.onplay=()=>{syncMiniPlayer();if("mediaSession" in navigator)navigator.mediaSession.playbackState="playing"};
-    audio.onpause=()=>{updatePosition(audio.currentTime,true);syncMiniPlayer();if("mediaSession" in navigator)navigator.mediaSession.playbackState="paused"};
-    audio.ontimeupdate=()=>{updatePosition(audio.currentTime);updateMediaSessionPosition()};
+    swapped=true;
+    prepareMediaSession(item);
+    startProgressTracker();
+    audio.onplay=()=>{
+      syncMiniPlayer();
+      if("mediaSession" in navigator)navigator.mediaSession.playbackState="playing";
+    };
+    audio.onpause=()=>{
+      if(playback.mode==="audio")updatePosition(audio.currentTime,true);
+      syncMiniPlayer();
+      if("mediaSession" in navigator)navigator.mediaSession.playbackState="paused";
+    };
+    audio.ontimeupdate=()=>{if(playback.mode==="audio"){updatePosition(audio.currentTime);updateMediaSessionPosition()}};
     audio.onended=()=>{syncMiniPlayer();if("mediaSession" in navigator)navigator.mediaSession.playbackState="none"};
-    audio.onerror=()=>{playerMessage("Le flux audio a été interrompu par le serveur.");syncMiniPlayer()};
+    audio.onerror=()=>{playerMessage("Le serveur de cette piste audio a interrompu la lecture.");syncMiniPlayer()};
     syncMiniPlayer();syncPlayerButtons();
-    setPlaybackInfo("Audio synchronisé à "+time(from)+". Tu peux verrouiller l’écran si ton navigateur autorise cette lecture.");
-    await audio.play().catch(()=>playerMessage("Sur mobile, appuie sur ▶ dans le lecteur audio pour reprendre à "+time(from)+"."));
-  }catch(error){playerMessage("Impossible de passer à l’audio : "+error.message+" Le lecteur vidéo reste disponible.")}
-  finally{if(switchId===playback.switching){button.disabled=false;button.textContent="♫ Passer à l'audio · garder la position"}}
+    setPlaybackInfo("Audio repris à "+time(audio.currentTime||lastPosition)+
+      ". Tu peux maintenant réduire le lecteur ou verrouiller l’écran. Si iOS bloque le démarrage, appuie sur ▶.");
+    try{
+      await audio.play();
+    }catch(error){
+      // Safari may not permit play() after a network request. Keep the
+      // native <audio controls> visible and ready for the required user tap.
+      setPlaybackInfo("Piste audio prête à "+time(audio.currentTime||lastPosition)+
+        ". Appuie sur ▶ dans le lecteur audio, puis verrouille l’écran.");
+    }
+  }catch(error){
+    if(switchId===playback.switching&&!swapped){
+      audio.pause();audio.removeAttribute("src");audio.load();audio.style.display="none";
+      playerMessage("Basculement audio indisponible : "+String(error?.message||error)+
+        " La vidéo continue normalement.");
+      setPlaybackInfo("La vidéo continue. Aucun flux audio séparé utilisable n’a été trouvé.");
+    }
+  }finally{
+    if(switchId===playback.switching){
+      mainButton.disabled=false;
+      headerButton.disabled=false;
+      mainButton.textContent=swapped?"♫ Lecture audio · même position":"♫ Passer en audio · garder la position";
+      headerButton.textContent=swapped?"♫ Audio actif":"♫ Passer en audio";
+    }
+  }
 }
 function switchToVideo(){
   const item=state.playing;if(!item)return;
@@ -960,15 +1016,8 @@ function continueInNativeAndroidAudio(){
     "S.browser_fallback_url="+encodeURIComponent(help)+";end";
   location.href=intent;
 }
-// Match the label to the actual platform, rather than advertising an Android APK on iPhone.
-if(window.webkit?.messageHandlers?.JabouNative){
-  $("lockAudio").textContent="♫ Audio écran verrouillé · iOS natif";
-  $("lockAudio").title="Utiliser le lecteur AVPlayer de l’application native JabouTube iOS (expérimental).";
-}else if(/iPhone|iPad|iPod/i.test(navigator.userAgent||"")){
-  $("lockAudio").textContent="♫ Continuer dans YouTube (Premium)";
-  $("lockAudio").title="Safari ne peut pas garantir la lecture YouTube écran verrouillé ; ouvrir l’application officielle.";
-}
-$("lockAudio").onclick=continueInNativeAndroidAudio;
+// The same PWA control applies on Safari/iOS and Chrome/Android.
+$("lockAudio").onclick=()=>startBackgroundAudio();
 $("openOriginal").onclick=continueInOfficialYoutube;
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("playerOverlay").classList.contains("open")){$("closePlayer").click()}});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
