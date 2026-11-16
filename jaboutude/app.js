@@ -291,8 +291,13 @@ async function startBackgroundAudio(){
   try{
     const data=await request("/streams/"+encodeURIComponent(item.id));
     if(switchId!==playback.switching||state.playing?.id!==item.id)return;
+    // iOS compatibility: prefer AAC-LC (mp4a.40.2) over HE-AAC (mp4a.40.5).
+    // URLs are resolved through Invidious local=true to avoid Googlevideo 403.
     const audioChoices=(data.audioStreams||[]).filter(x=>x.url&&/audio\/mp4/i.test(x.format||""))
-      .sort((a,b)=>Math.abs((a.bitrate||128000)-128000)-Math.abs((b.bitrate||128000)-128000));
+      .sort((a,b)=>{
+        const compat=x=>/mp4a\.40\.2/.test(x.format||"")?0:1;
+        return compat(a)-compat(b)||Math.abs((a.bitrate||128000)-128000)-Math.abs((b.bitrate||128000)-128000);
+      });
     const chosen=audioChoices[0]||(data.audioStreams||[]).find(x=>x.url);
     if(!chosen)throw Error("Aucun flux audio compatible disponible.");
     // Read the actual time just before switching, not before the network request.
@@ -311,7 +316,7 @@ async function startBackgroundAudio(){
     };
     await new Promise((resolve,reject)=>{
       if(audio.readyState>=1){seekAfterMetadata();resolve();return;}
-      const timer=setTimeout(()=>{cleanup();reject(Error("Le flux audio ne répond pas."))},12000);
+      const timer=setTimeout(()=>{cleanup();reject(Error("Le flux audio met trop de temps à répondre. Réessaie ou sélectionne une autre vidéo."))},22000);
       function cleanup(){clearTimeout(timer);audio.removeEventListener("loadedmetadata",ready);audio.removeEventListener("error",broken)}
       function ready(){cleanup();seekAfterMetadata();resolve()}
       function broken(){cleanup();reject(Error("Flux audio indisponible sur cet appareil."))}
@@ -332,7 +337,7 @@ async function startBackgroundAudio(){
     syncMiniPlayer();syncPlayerButtons();
     setPlaybackInfo("Audio synchronisé à "+time(from)+". Tu peux verrouiller l’écran si iOS autorise cette lecture.");
     await audio.play().catch(()=>playerMessage("Sur iPhone, appuie sur ▶ dans le lecteur audio pour reprendre à "+time(from)+"."));
-  }catch(error){playerMessage("Impossible de passer à l’audio : "+error.message)}
+  }catch(error){playerMessage("Impossible de passer à l’audio : "+error.message+" Le lecteur vidéo reste disponible.")}
   finally{if(switchId===playback.switching){button.disabled=false;button.textContent="♫ Passer à l'audio · garder la position"}}
 }
 function switchToVideo(){

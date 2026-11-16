@@ -103,7 +103,7 @@ http.createServer(async(req,res)=>{
    const id=u.pathname.slice('/api/streams/'.length);
    if(!safeId(id))return json(res,400,{error:'Identifiant de vidéo invalide.'});
    const item=await getCached('video:'+id,60000,async()=>{
-     const r=await upstream('/api/v1/videos/'+id,x=>x&&typeof x==='object'&&x.videoId===id);
+     const r=await upstream('/api/v1/videos/'+id+'?local=true',x=>x&&typeof x==='object'&&x.videoId===id);
      return fromUpstream(r.value,r.host);
    });
    return json(res,200,item);
