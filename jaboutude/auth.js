@@ -1,6 +1,6 @@
 "use strict";
 (function(){
-  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false,familyOnly:true,familyReady:false,authorized:false,inviteOnly:false,familySession:null};
+  const state={clientId:"",configured:false,token:null,profile:null,playlists:[],subscriptions:[],expiresAt:0,loading:false,error:"",youtubeConnected:false,familyOnly:true,familyReady:false,authorized:false,inviteOnly:false,familySession:null,googleProfile:null};
 
   const FAMILY_SESSION_KEY="jaboutube.family.session.v1";
   const apiBase=()=>window.JaboutubeApiBase||"";
@@ -108,6 +108,11 @@
     state.error="";state.youtubeConnected=false;
     state.playlists=[];state.subscriptions=[];
     let profile=await googleGet("oauth2/v3/userinfo");
+    if(state.inviteOnly){
+      if(!state.authorized||!state.familySession)throw Error("Ouvre d’abord ton lien personnel JabouTube.");
+      state.googleProfile=profile;
+      state.loading=false;notify();return;
+    }
     if(state.familyOnly){
       if(!state.familyReady)throw Error("Accès familial à configurer par le propriétaire.");
       const verified=await fetch((window.JaboutubeApiBase||"")+"/api/me",{headers:{Authorization:"Bearer "+state.token,Accept:"application/json"},cache:"no-store"});
@@ -127,25 +132,31 @@
       state.error="Tu n’as pas autorisé YouTube. Ton compte Google reste connecté.";
       notify();return;
     }
-    // Google may offer a different account in the separate YouTube consent flow.
-    const prior=state.profile?.sub;
+    // In private invitation mode, Google is linked to a family profile,
+    // not used to replace that profile or its private access token.
+    if(state.inviteOnly&&(!state.authorized||!state.familySession))
+      throw Error("Rejoins d’abord ton espace familial avec ton invitation.");
+    const prior=state.inviteOnly?state.googleProfile?.sub:state.profile?.sub;
     const nextToken=response.access_token;
     const nextProfileResponse=await fetch("https://www.googleapis.com/oauth2/v3/userinfo",{headers:{Authorization:"Bearer "+nextToken},cache:"no-store"});
     const nextProfile=await nextProfileResponse.json().catch(()=>({}));
-    if(!nextProfileResponse.ok||!prior||prior!==nextProfile.sub)
+    if(!nextProfileResponse.ok||!nextProfile.sub)
+      throw Error("Impossible de vérifier le compte Google choisi.");
+    if(prior&&prior!==nextProfile.sub&&!state.inviteOnly)
       throw Error("Choisis le même compte Google pour YouTube et JabouTube.");
-    if(state.familyOnly){
+    if(state.familyOnly&&!state.inviteOnly){
       const access=await fetch((window.JaboutubeApiBase||"")+"/api/me",{headers:{Authorization:"Bearer "+nextToken},cache:"no-store"});
       if(!access.ok)throw Error("Compte familial non autorisé.");
     }
+    state.googleProfile=nextProfile;
     state.token=nextToken;
     state.expiresAt=Date.now()+Math.max(60,Number(response.expires_in||3500))*1000;
     state.youtubeConnected=true;state.error="";notify();
     await fetchCollections();
   }
   async function connect(){
-    if(state.inviteOnly)throw Error("Ouvre ton lien personnel JabouTube pour te connecter automatiquement.");
-    if(!state.configured)throw Error("La connexion Google publique attend l’activation de l’application par son propriétaire.");
+    if(state.inviteOnly&&!state.authorized)throw Error("Ouvre d’abord ton lien personnel JabouTube.");
+    if(!state.configured)throw Error("Connexion Google non configurée : il manque GOOGLE_CLIENT_ID sur Render.");
     state.error="";state.loading=true;notify();
     try{
       await loadGoogle();
@@ -161,8 +172,9 @@
     }catch(error){fail(error);throw error}
   }
   async function connectYoutube(){
-    if(state.inviteOnly)throw Error("La synchronisation YouTube via Google n’est pas activée en mode invitation.");
-    if(!state.profile)throw Error("Connecte d’abord ton compte Google.");
+    if(!state.configured)throw Error("Le propriétaire doit configurer le Client ID Google OAuth sur Render et activer YouTube Data API v3.");
+    if(state.inviteOnly&&!state.authorized)throw Error("Ouvre d’abord ton lien familial.");
+    if(!state.inviteOnly&&!state.profile)throw Error("Connecte d’abord ton compte Google.");
     state.error="";state.loading=true;notify();
     try{
       await loadGoogle();
@@ -180,9 +192,14 @@
   function disconnect(){
     if(state.inviteOnly)localStorage.removeItem(FAMILY_SESSION_KEY);
     state.familySession=null;
-    state.token=null;state.profile=null;state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;state.authorized=false;state.expiresAt=0;state.loading=false;
+    state.token=null;state.profile=null;state.googleProfile=null;state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;state.authorized=false;state.expiresAt=0;state.loading=false;
     state.error=state.inviteOnly?"Ouvre à nouveau une invitation familiale valide pour rejoindre JabouTube.":"";
     notify();
+  }
+  function disconnectGoogle(){
+    state.token=null;state.googleProfile=null;state.expiresAt=0;
+    state.playlists=[];state.subscriptions=[];state.youtubeConnected=false;
+    state.loading=false;state.error="";notify();
   }
   async function playlistItems(playlistId){
     if(!state.youtubeConnected)throw Error("Autorise l’accès à YouTube avant d’ouvrir une playlist.");
@@ -199,5 +216,5 @@
     if(state.inviteOnly)return state.authorized?state.familySession:null;
     return state.authorized&&state.token&&Date.now()<state.expiresAt-12000?state.token:null;
   }
-  window.JabouAuth={state,subscribe,init,connect,connectYoutube,disconnect,playlistItems,getAccessToken};
+  window.JabouAuth={state,subscribe,init,connect,connectYoutube,disconnect,disconnectGoogle,playlistItems,getAccessToken};
 })();
