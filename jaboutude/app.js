@@ -15,6 +15,7 @@ const save=(k,v)=>localStorage.setItem(memberStorageKey(k),JSON.stringify(v));
 let latestRequest=0;
 const HISTORY_LIMIT=8000;
 let historyPageSize=80;
+let homeTrending=[],homeTrendingLoading=false,homeTrendingError="";
 const state={tab:"account",query:"",playing:null,items:[],history:[],favorites:[],api:stored(KEYS.instance,INSTANCES[0].url),busy:false,music:false};
 function familyLocked(){const a=window.JabouAuth?.state;return !!(a?.familyOnly&&!a.authorized)}
 function switchFamilyProfile(a){
@@ -40,7 +41,7 @@ function setTab(tab){
   const hero=document.querySelector(".hero");if(hero)hero.classList.toggle("compact",tab!=="home");
   const quick=$("quickLinks");if(quick)quick.hidden=tab!=="home";
   document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
-  if(tab==="home"){setTitle("À LA UNE","Découvre tes prochaines vidéos.","Un seul endroit pour rechercher, regarder et retrouver tes contenus.");loadTrending();}
+  if(tab==="home"){setTitle("POUR TOI","Ton accueil personnel.","Reprends tes dernières vidéos et découvre des nouveautés.");loadTrending();}
   else if(tab==="music"){setTitle("JABOUTUDE MUSIC","Toute ta musique.","Recherche un artiste, un titre ou colle un lien YouTube Music.");renderMusic();}
   else if(tab==="library"){setTitle("BIBLIOTHÈQUE","Ta bibliothèque.","Tes favoris locaux et les playlists YouTube de ton compte Google.");renderLibrary();}
   else if(tab==="favorites"){setTitle("TA BIBLIOTHÈQUE","Tes favoris.","Tes vidéos enregistrées sur cet appareil.");renderList(state.favorites,"Aucun favori pour l'instant.");}
@@ -73,17 +74,56 @@ function fail(msg){
   $("content").innerHTML='<div class="empty"><b>Impossible de récupérer les vidéos.</b><p>'+h(msg)+'</p><p>Les fournisseurs de recherche externes peuvent être bloqués (HTTP 403). Réessaie, ou colle directement le lien d’une vidéo YouTube publique dans la recherche.</p><button id="retry" class="primary">Réessayer</button></div>';
   $("retry").onclick=()=>state.query?search(state.query):loadTrending();
 }
+function renderHome(){
+  if(state.tab!=="home"||familyLocked())return;
+  const recent=state.history.filter(x=>x?.id).slice(0,12);
+  const recentIds=new Set(recent.map(x=>x.id));
+  const discovery=homeTrending.filter(x=>x?.id&&!recentIds.has(x.id)).slice(0,24);
+  state.items=[...recent,...discovery];
+  const auth=window.JabouAuth?.state;
+  const channels=auth?.youtubeConnected?(auth.subscriptions||[]).slice(0,10):[];
+  const recentSection=recent.length
+    ?'<div class="headrow"><h2>Récemment regardées</h2><button class="secondary" data-tab="history">Tout l’historique</button></div>'+
+      '<p class="muted">Retrouve en priorité tes vidéos les plus récentes, y compris celles importées une fois depuis Google Takeout.</p>'+cards(recent)
+    :'<div class="headrow"><h2>Récemment regardées</h2></div>'+
+      '<div class="notice"><b>Personnalise ton accueil.</b> Les vidéos regardées dans JabouTube apparaîtront ici automatiquement. Pour retrouver les anciennes vidéos déjà regardées sur YouTube, importe une seule fois ton fichier d’historique préparé.<div class="actions" style="margin-top:12px"><button class="primary" id="homeImport">Importer une seule fois mon historique</button></div></div>';
+  const channelsSection=channels.length
+    ?'<div class="headrow" style="margin-top:26px"><h2>Mes chaînes suivies</h2><button class="secondary" data-tab="library">Ma bibliothèque</button></div>'+
+      '<div class="subscriptions">'+channels.map(x=>{
+        const id=String(x.snippet?.resourceId?.channelId||"");
+        return /^UC[A-Za-z0-9_-]{22}$/.test(id)
+          ?'<a href="https://www.youtube.com/channel/'+encodeURIComponent(id)+'" target="_blank" rel="noopener noreferrer">'+h(x.snippet?.title||"Chaîne YouTube")+'</a>'
+          :'';
+      }).join("")+'</div>'
+    :'';
+  const discoverySection='<div class="headrow" style="margin-top:26px"><h2>Découvrir des vidéos</h2></div>'+
+    (discovery.length?cards(discovery):homeTrendingLoading
+      ?'<p class="muted">Chargement des tendances…</p>'
+      :'<div class="notice">Les tendances externes sont actuellement indisponibles. Tes vidéos récentes restent accessibles.'+(homeTrendingError?'<div class="muted">'+h(homeTrendingError)+'</div>':'')+
+        '<div class="actions" style="margin-top:10px"><button class="secondary" id="retryTrending">Réessayer</button></div></div>');
+  $("content").innerHTML=recentSection+channelsSection+discoverySection;
+  const importer=$("homeImport");
+  if(importer)importer.onclick=()=>{setTab("settings");$("importData")?.click()};
+  const retry=$("retryTrending");
+  if(retry)retry.onclick=()=>loadTrending();
+}
 async function loadTrending(){
   const seq=++latestRequest;
-  status("Chargement des tendances…");
-  $("content").innerHTML='<div class="skeleton-grid">'+Array.from({length:8},()=>'<div class="skeleton-card"><div></div><i></i><i></i></div>').join("")+'</div>';
+  homeTrendingLoading=true;homeTrendingError="";
+  renderHome();
   try{
     const data=await request("/trending");
-    if(seq!==latestRequest || state.tab!=="home")return;
-    const items=(Array.isArray(data)?data:[]).map(normal).filter(Boolean);
-    if(!items.length)throw Error("Aucune tendance disponible pour le moment.");
-    renderList(items);status(items.length+" vidéos · tendances en France");
-  }catch(e){if(seq!==latestRequest)return;fail(e.message);status("Les tendances ne répondent pas.");}
+    if(seq!==latestRequest||state.tab!=="home")return;
+    homeTrending=(Array.isArray(data)?data:[]).map(normal).filter(Boolean);
+    if(!homeTrending.length)throw Error("Aucune tendance disponible.");
+    status(homeTrending.length+" tendances disponibles.");
+  }catch(error){
+    if(seq!==latestRequest||state.tab!=="home")return;
+    homeTrendingError=String(error?.message||"Tendances indisponibles.");
+    status("Tes vidéos récentes restent disponibles.");
+  }finally{
+    if(seq===latestRequest&&state.tab==="home"){homeTrendingLoading=false;renderHome();}
+  }
 }
 async function search(term){
   if(familyLocked()){setTab("account");return;}
@@ -151,6 +191,7 @@ function historyAdd(it){
     watchCount:(Number(previous?.watchCount)||0)+1};
   state.history=[entry,...state.history.filter(x=>x.id!==it.id)].slice(0,HISTORY_LIMIT);
   try{save(KEYS.history,state.history)}catch(error){status("Stockage d’historique saturé : "+error.message)}
+  if(state.tab==="home")renderHome();
 }
 
 
@@ -711,6 +752,7 @@ window.JabouAuth?.subscribe(a=>{
   if(a.familyOnly&&(!a.authorized||changed)){setTab(a.authorized?"home":"account");return;}
   if(state.tab==="account")renderAccount();
   if(state.tab==="library")renderLibrary();
+  if(state.tab==="home"&&!changed)renderHome();
 });
 setTab("account");
 window.JabouAuth?.init().then(()=>{
