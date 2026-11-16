@@ -681,9 +681,12 @@ function renderInviteAccount(auth){
     '<div class="takeout-setup"><h2>Personnaliser mon accueil YouTube</h2>'+
     '<p>JabouTube apprend automatiquement tes goûts avec tes abonnements et tes vidéos regardées ici.</p>'+
     '<p>Pour récupérer tes anciennes préférences YouTube, demande une seule fois ton historique dans Google Takeout, puis sélectionne directement son ZIP ici. Aucun JSON à extraire, aucun passage par ChatGPT.</p>'+
-    '<div class="actions"><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">1. Obtenir mon archive Google</a>'+
-    '<button class="primary" type="button" data-import-history>2. Importer mon ZIP automatiquement</button></div>'+
-    '<p class="muted">'+state.history.length+' vidéos enregistrées sur cet appareil. Aucune archive envoyée au serveur.</p></div>':'';
+    '<div class="actions"><button class="primary" type="button" data-google-history>Récupérer mon historique depuis Google</button></div>'+
+    '<p class="muted">Google doit autoriser ce transfert. La préparation peut prendre plusieurs heures. Sélectionne ton propre compte Google lors de l’autorisation.</p>'+
+    '<div class="notice" id="portabilityStatus" role="status" aria-live="polite">La récupération automatique utilise Google Data Portability. Tant que l’application est en mode test, seuls les comptes test autorisés par Google peuvent l’utiliser.</div>'+
+    '<div class="actions"><a class="secondary" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Exporter mon ZIP Google</a>'+
+    '<button class="secondary" type="button" data-import-history>Importer un ZIP (autre solution)</button></div>'+
+    '<p class="muted">'+state.history.length+' vidéos enregistrées sur cet appareil. Google ou JabouTube peuvent nécessiter une validation supplémentaire pour le transfert automatique.</p></div>':'';
   $("content").innerHTML='<div class="settings account-area">'+account+google+historySetup+
     (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
     '<p class="muted">Historique et favoris locaux, distincts pour chaque membre sur ce navigateur. L’historique de ton compte YouTube peut être importé depuis Google Takeout, mais ne se synchronise pas automatiquement.</p>'+
@@ -807,6 +810,31 @@ async function importHistoryFile(file){
     throw error;
   }
 }
+async function startGoogleHistorySync(){
+  const auth=window.JabouAuth?.state;
+  if(!auth?.authorized||!auth.profile?.sub){setTab("account");status("Connecte d’abord ton compte familial.");return;}
+  if(typeof window.JabouPortability?.run!=="function"){
+    status("Le module de transfert Google n’est pas chargé. Actualise JabouTube.");return;
+  }
+  const button=document.querySelector("[data-google-history]");
+  if(button)button.disabled=true;
+  const notify=message=>{
+    status(message);
+    const output=$("portabilityStatus");
+    if(output)output.textContent=message;
+  };
+  try{
+    const result=await window.JabouPortability.run({
+      clientId:auth.clientId,memberId:auth.profile.sub,
+      onStatus:notify,
+      onFile:importHistoryFile
+    });
+    if(result?.state==="COMPLETE")notify(result.count+" vidéos retrouvées : accueil personnalisé mis à jour !");
+  }catch(error){
+    const reason=String(error?.message||error);
+    notify("Transfert Google indisponible : "+reason+". Tu peux toujours importer un ZIP Google Takeout.");
+  }finally{if(button)button.disabled=false;}
+}
 $("globalHistoryFile").onchange=async e=>{
   const file=e.target.files?.[0];
   try{if(file)await importHistoryFile(file);}
@@ -814,6 +842,7 @@ $("globalHistoryFile").onchange=async e=>{
   finally{e.target.value="";}
 };
 document.addEventListener("click",e=>{
+  if(e.target.closest("[data-google-history]")){startGoogleHistorySync();return;}
   if(e.target.closest("[data-import-history]")){$("globalHistoryFile")?.click();return;}
   const youtube=e.target.closest("[data-connect-youtube]");
   if(youtube){window.JabouAuth?.connectYoutube().catch(err=>status(err.message));return;}
