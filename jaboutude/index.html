@@ -194,14 +194,14 @@ main{max-width:1600px;width:100%;margin:0 auto;padding:22px 30px 105px}.top{disp
 </div>
 <div class="playerbackdrop" id="playerOverlay" role="dialog" aria-label="Lecteur vidéo">
 <div class="playerpanel">
-<div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><div class="actions"><button class="secondary" id="lockAudio" type="button" title="Écouter avec le lecteur natif JabouTube Audio sur Android (application compagnon requise)">♫ Audio écran verrouillé (Android)</button><button class="secondary" id="closePlayer">↓ Réduire</button></div></div>
+<div class="watchtop"><span class="brand"><span class="brand-icon">▶</span>Lecture</span><div class="actions"><button class="secondary" id="lockAudio" type="button" title="Passer au lecteur audio de la PWA, en conservant la position de la vidéo">♫ Passer en audio</button><button class="secondary" id="closePlayer">↓ Réduire</button></div></div>
 <video id="videoPlayer" controls playsinline webkit-playsinline preload="metadata" style="display:none" aria-label="Vidéo avec lecture Picture-in-Picture lorsque prise en charge"></video>
 <iframe id="fallbackEmbed" title="Lecteur YouTube de secours" style="display:none;width:100%;aspect-ratio:16/9;border:0;border-radius:14px;margin:12px 0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 <audio id="audioPlayer" controls playsinline preload="metadata" style="display:none"></audio>
-<div class="actions" style="margin:12px 0"><button class="primary" id="backgroundAudio" type="button" hidden>Mode audio externe indisponible</button></div>
+<div class="actions" style="margin:12px 0"><button class="secondary" id="backgroundAudio" type="button">♫ Passer en audio · conserver la position</button></div>
 <div id="playerError" class="notice" style="display:none"></div>
 <div class="playertext"><div><h2 id="watchTitle">Chargement…</h2><p class="muted" id="watchAuthor"></p></div><div class="actions"><button class="secondary" id="favCurrent">♡ Favoris</button><button class="secondary" id="shareCurrent">↗ Partager</button></div></div>
-<p class="playerhelp">Sur <b>iPhone</b> : la lecture écran verrouillé est disponible à l’essai seulement avec <a href="./ios-audio.html" target="_blank" rel="noopener noreferrer">JabouTube iOS natif (prototype)</a> ; Safari ou la PWA ne peuvent pas forcer cette fonction sur le lecteur YouTube intégré. Sur Android, <a href="./android-audio.html" target="_blank" rel="noopener noreferrer">le prototype compagnon</a> reste expérimental. Les flux YouTube indépendants peuvent être bloqués ; pour la lecture officielle, utilise « Continuer dans YouTube » selon les fonctionnalités du compte.</p>
+<p class="playerhelp">Dans la PWA iPhone ou Android, touche <b>♫ Passer en audio</b> <b>avant de verrouiller l’écran</b>. Quand une piste compatible est disponible, JabouTube reprend le son à la même position et affiche les commandes audio. La lecture écran verrouillé dépend du navigateur et de la disponibilité du flux : elle n’est pas garantie pour les vidéos YouTube. Si la reprise automatique est bloquée sur iOS, touche ▶ dans le lecteur audio. Tu peux revenir à la vidéo à la même position. La lecture officielle reste accessible avec « Continuer dans YouTube ».</p>
 <div class="playback-actions" hidden>
   <button class="secondary" id="switchVideo" type="button">▶ Revenir à la vidéo</button>
   <button class="secondary" id="pipButton" type="button">▣ Fenêtre flottante (PiP)</button>
