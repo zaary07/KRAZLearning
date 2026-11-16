@@ -476,7 +476,7 @@ async function togglePictureInPicture(){
   }catch(error){setPlaybackInfo("PiP refusé par le navigateur ("+error.name+"). La vidéo native et Safari peuvent offrir des fonctionnalités différentes.")}
 }
 function settingsHtml(){return '<div class="settings">'+
-'<h2>Compte Google</h2><p class="muted">Connecte-toi depuis l’onglet Compte pour accéder aux playlists et abonnements lorsque l’authentification Google sera configurée.</p><button class="primary" data-tab="account">Ouvrir le compte</button>'+
+'<h2>Compte personnel</h2><p class="muted">'+(window.JabouAuth?.state?.inviteOnly?'Un lien personnel suffit pour rejoindre JabouTube. Ton appareil est ensuite reconnu automatiquement.':'Connecte-toi depuis l’onglet Compte pour accéder à ton espace.')+'</p><button class="primary" data-tab="account">Ouvrir le compte</button>'+
 '<h2 style="margin-top:24px">Historique personnel</h2><p class="muted">'+state.history.length+' vidéos consultées · '+state.favorites.length+' favoris</p>'+
 '<div class="actions"><button class="secondary" id="exportData">Exporter</button><button class="secondary" id="importData">Importer un JSON</button><input type="file" id="importInput" accept=".json,application/json" hidden><button class="secondary" id="clearHistory">Effacer l’historique</button></div>'+
 '<div class="notice"><b>Importer ton historique YouTube :</b> exporte « YouTube et YouTube Music » au format JSON dans <a href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout</a>, puis importe watch-history.json ici. Cela reste une copie locale, pas une synchronisation permanente.</div>'+
@@ -494,9 +494,23 @@ function renderLibrary(){
   (fav.length?cards(fav):'<div class="empty">Aucun favori pour l’instant. Ouvre une vidéo et touche ♡.</div>')+
   '<div class="headrow" style="margin-top:28px"><h2>Playlists YouTube</h2><button class="secondary" data-tab="account">Mon compte</button></div>'+body;
 }
+function renderInviteAccount(auth){
+  const p=auth.profile;
+  const profile=p
+    ?'<div class="account-profile"><span class="profile-photo">✓</span><div><strong>'+h(p.name||"Membre de la famille")+'</strong><div class="muted">Espace personnel JabouTube</div></div></div>'+
+     '<div class="notice"><b>Connexion automatique active.</b> Cet appareil reconnaît ton invitation familiale. Historique et favoris sont séparés de ceux des autres membres sur ce navigateur.</div>'+
+     '<div class="actions"><button class="secondary" data-disconnect>Se déconnecter</button><button class="secondary" data-tab="library">Ma bibliothèque</button></div>'
+    :'<div class="connect-hero"><div class="google-emblem">♡</div><h2>Bienvenue sur JabouTube Famille</h2><p class="muted">Pour rejoindre ton espace privé, ouvre le lien personnel qui t’a été envoyé. Aucun compte Gmail ni mot de passe n’est nécessaire.</p><p class="muted">Après la première ouverture, ton appareil restera connecté, sauf expiration de la session ou effacement des données.</p></div>';
+  $("content").innerHTML='<div class="settings account-area">'+profile+
+    (auth.error?'<div class="notice">'+h(auth.error)+'</div>':'')+
+    '<div class="notice">Chaque membre possède son espace local. Les favoris et l’historique ne sont pas encore synchronisés entre appareils et ne sont pas chiffrés localement. Un lien d’invitation transmis à quelqu’un d’autre peut être réutilisé durant sa validité.</div>'+
+    '<div class="headrow"><a href="./admin.html">Créer une invitation (propriétaire)</a></div>'+
+    '<div class="headrow"><a href="./privacy.html">Confidentialité</a> <a href="./terms.html">Conditions d’utilisation</a></div></div>';
+}
 function renderAccount(){
   const auth=window.JabouAuth?.state;
   if(!auth){$("content").innerHTML='<div class="empty">Initialisation du compte…</div>';return;}
+  if(auth.inviteOnly){renderInviteAccount(auth);return;}
   const p=auth.profile;
   let profile="";
   if(p){
