@@ -1,0 +1,32 @@
+name: JabouTube iOS Native IPA (experimental)
+on:
+  workflow_dispatch:
+  push:
+    branches: [jaboutube-ios]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/jaboutube-ios-native.yml'
+jobs:
+  build:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate --spec ios/project.yml --project ios
+      - name: Build unsigned iOS app
+        run: |
+          xcodebuild -project ios/JabouTubeiOS.xcodeproj -scheme JabouTubeiOS -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO build
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p ios/Payload
+          cp -R ios/DerivedData/Build/Products/Release-iphoneos/JabouTubeiOS.app ios/Payload/
+          (cd ios && zip -qr JabouTube-iOS-unsigned.ipa Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JabouTube-iOS-unsigned-IPA
+          path: ios/JabouTube-iOS-unsigned.ipa
+          retention-days: 14
