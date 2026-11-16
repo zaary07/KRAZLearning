@@ -1,16 +1,32 @@
-# JabouTube — famille privée
+# JabouTube — accès familial par invitation
 
-Application Web / PWA personnelle et familiale, avec lecture YouTube intégrée lorsque autorisée, recherche dépendant de fournisseurs externes, favoris et historique local.
+Application Web (PWA) personnelle et familiale. Lecture YouTube intégrée dans les limites autorisées par YouTube, recherche dépendant de fournisseurs externes, favoris et historique local.
 
-## Activer la restriction aux membres de la famille
-Configurer les variables d’environnement du service Render **jaboutude-server** :
-- `GOOGLE_CLIENT_ID` : ID client OAuth 2.0 Web Google, avec origines autorisées correspondant à l’URL du serveur et, si utilisé, au site iOS.
-- `JABOUTUBE_ALLOWED_EMAILS` : liste des adresses Google autorisées, séparées par des virgules.
+## Lien d'invitation (sans connaître les adresses Gmail)
 
-**Important : sans liste d’adresses `JABOUTUBE_ALLOWED_EMAILS`, le mode privé n’est PAS actif et les API vidéo restent accessibles publiquement.** Lorsque cette liste est configurée, les API vidéo vérifient le jeton Google et refusent les autres comptes. L’interface statique peut néanmoins être chargée sans connexion ; elle ne fournit pas l’accès aux API privées.
+Le propriétaire ouvre `https://jaboutude-server.onrender.com/admin.html`, saisit sa **clé administrateur** et le prénom/surnom du membre, puis partage son lien personnel.
 
-Chaque membre se connecte avec son propre compte Google. Historique, favoris et positions de lecture sont séparés par identifiant de compte dans le stockage local de chaque navigateur. Ils ne sont **pas synchronisés entre appareils, ni chiffrés** : ce mécanisme ne protège pas contre une personne ayant accès au stockage du navigateur. Pour des données réellement privées sur un appareil partagé et synchronisées, prévoir un stockage serveur avec contrôle d’accès par utilisateur.
+Sur son propre téléphone, le membre ouvre ce lien : la PWA échange l'invitation contre une session signée et la mémorise localement. Aux visites suivantes sur le même stockage de navigateur, il reste connecté automatiquement. Aucun compte Google n'est demandé en mode invitation.
 
-Le lecteur ne contourne pas les droits d’auteur ni les restrictions de diffusion, et dépend de la disponibilité des sources YouTube et communautaires.
+Chaque membre reçoit **un lien distinct**, sinon les deux appareils partageraient le même identifiant et les mêmes données locales de profil.
+
+## Configuration de Render
+
+Sur le service **jaboutude-server**, définir les deux variables d'environnement :
+
+- `JABOUTUBE_INVITE_SECRET` — valeur secrète aléatoire d'au moins 32 caractères utilisée pour signer les invitations et sessions.
+- `JABOUTUBE_ADMIN_KEY` — clé administrateur d'au moins 24 caractères utilisée par `admin.html`.
+
+Ces deux valeurs ne doivent jamais être écrites dans le dépôt GitHub ni intégrées dans l'application ou l'APK. Elles restent côté serveur.
+
+Si `JABOUTUBE_INVITE_SECRET` est défini mais la configuration est incomplète, les APIs sont verrouillées ; la liste Google `JABOUTUBE_ALLOWED_EMAILS` est ignorée dans ce mode. Si aucune configuration familiale n'est définie, les APIs restent publiques (mode hérité) : il faut activer le mode invitation pour obtenir l'accès privé.
+
+## Limitations de sécurité de cette première version
+
+- Les invitations expirent au bout de 14 jours mais **ne sont pas à usage unique** : quelqu'un à qui le lien est transféré peut s'en servir durant cette période.
+- Les sessions durent au maximum 365 jours ; faute de base de données persistante, elles ne peuvent pas être révoquées individuellement. Changer `JABOUTUBE_INVITE_SECRET` invalide toutes les sessions/invitations.
+- Les historiques, favoris et positions sont séparés **dans le stockage local du navigateur** par identifiant de membre. Ils ne sont pas synchronisés entre appareils ni chiffrés, et restent accessibles à une personne ayant un accès technique aux données du navigateur.
+- Un APK générique ne peut pas déterminer seul quel membre l'a installé. L'activation requiert un lien individuel ou un code d'invitation. Pour une meilleure sécurité (invitations à usage unique, révocation et synchronisation), ajouter une base de données avec comptes et sessions côté serveur.
+- Les sources YouTube qui ont été retirées ou restreignent l'intégration restent indisponibles.
 
 Démarrage local : `node jaboutude/server.mjs` (Render fournit `PORT`).
